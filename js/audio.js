@@ -20,6 +20,8 @@
       if (!ctx) return; const s = ED.save.meta.settings;
       master.gain.value = A.muted ? 0 : 1; sfxBus.gain.value = 0.55 * s.volume; musBus.gain.value = 0.5 * s.music * s.volume;
     },
+    /** the page went to the background (or came back): stop / resume the whole audio graph */
+    suspend(on) { if (!ctx) return; try { if (on) ctx.suspend(); else ctx.resume(); } catch (e) { /* ignore */ } },
     toggleMute() { A.muted = !A.muted; A.applyVolume(); return A.muted; },
     // ---- building blocks
     tone(type, f0, f1, dur, vol, delay, bus) {

@@ -141,7 +141,7 @@
     },
     timeStr(f) { const s = Math.floor(f / 60), m = Math.floor(s / 60); return m + ':' + String(s % 60).padStart(2, '0'); },
     drawTutorial(g, c) {
-      const I = ED.input, lines = I.isDefault() ? ['WASD / Arrows: move     Space / J: attack     K / Shift: dash (i-frames!)', 'E: interact     Q: active ability     B: place bomb     Esc: pause', 'Clear rooms to open doors. Find the Boss Key — carried by a mini boss.']
+      const I = ED.input, lines = I.touchOn() ? ['Left thumb: move     Hold ATTACK: shoot (drag to aim)     DASH: i-frames!', 'USE: interact     Lightning: active     Bomb: place bomb     Pause: corner', 'Clear rooms to open doors. Find the Boss Key — carried by a mini boss.'] : I.isDefault() ? ['WASD / Arrows: move     Space / J: attack     K / Shift: dash (i-frames!)', 'E: interact     Q: active ability     B: place bomb     Esc: pause', 'Clear rooms to open doors. Find the Boss Key — carried by a mini boss.']
         : [['up', 'left', 'down', 'right'].map(a => I.key1(a)).join(' ') + ': move     ' + I.label('attack') + ': attack     ' + I.label('dash') + ': dash (i-frames!)', I.label('interact') + ': interact     ' + I.label('active') + ': active ability     ' + I.label('bomb') + ': place bomb     Esc: pause', 'Clear rooms to open doors. Find the Boss Key — carried by a mini boss.'];
       UI.panel(c, 150, 420 + C.HUD - 10, 660, 78, '#6a6a90', 0.7);
       lines.forEach((l, i) => UI.text(c, l, 480, 450 + C.HUD + i * 18 - 14, 13, '#e0e0f0', 'center', false));

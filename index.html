@@ -3,11 +3,20 @@
 <head>
 <meta charset="utf-8">
 <title>EMBERDEEP — an endless roguelike descent</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#050409">
+<meta name="description" content="EMBERDEEP - an endless Zelda-style roguelike descent. Plays in the browser on desktop, phone and tablet.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="EMBERDEEP">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <style>
   html, body { margin: 0; height: 100%; background: #050409; overflow: hidden; }
   body { display: flex; align-items: center; justify-content: center; }
-  #wrap { position: relative; width: min(100vw, 150vh); aspect-ratio: 960 / 640; box-shadow: 0 0 60px rgba(255,120,40,0.15); }
+  #wrap { position: relative; width: min(100vw, 150vh); width: min(100vw, 150dvh); aspect-ratio: 960 / 640; box-shadow: 0 0 60px rgba(255,120,40,0.15); }
   canvas { width: 100%; height: 100%; display: block; background: #07060c; image-rendering: auto; outline: none; }
   noscript { color: #fff; font-family: monospace; }
 </style>
@@ -75,6 +84,7 @@
 <script src="js/art_ui.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/menus.js"></script>
+<script src="js/touch.js"></script>
 <script src="js/debug.js"></script>
 <script src="js/main.js"></script>
 <script>

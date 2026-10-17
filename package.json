@@ -1,7 +1,7 @@
 {
   "name": "emberdeep",
-  "version": "2.0.0",
-  "description": "EMBERDEEP \u2014 an endless Zelda-style roguelike dungeon crawler (HTML5 Canvas, vanilla JS, no dependencies) \u2014 v1 + five switchable updates",
+  "version": "2.1.0",
+  "description": "EMBERDEEP \u2014 an endless Zelda-style roguelike dungeon crawler (HTML5 Canvas, vanilla JS, no dependencies) \u2014 v1 + switchable updates, touch controls and an installable offline app",
   "private": true,
   "scripts": {
     "start": "python3 serve.py 8000",
@@ -9,7 +9,8 @@
     "test:quick": "node --expose-gc test/run-tests.js --quick",
     "balance": "node test/balance.js 10",
     "test:matrix": "node test/matrix.js",
-    "parity": "node test/parity.js"
+    "parity": "node test/parity.js",
+    "test:touch": "node test/touch.js"
   },
   "license": "MIT"
 }

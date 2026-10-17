@@ -1,0 +1,73 @@
+name: tests and pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Also run the whole edition matrix (about 6 minutes)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Touch controls and the offline worker
+        run: node test/touch.js
+      - name: v1 parity (every update off equals the frozen original)
+        run: node test/parity.js
+      - name: Render parity (the classic renderer draws exactly what it always did)
+        run: node test/render-parity.js
+      - name: Quick suite, every update on
+        run: node --expose-gc test/run-tests.js --quick
+      - name: Edition matrix (manual runs only)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.full }}
+        run: node test/matrix.js
+
+  # Publishes the static game (and the frozen editions under /versions/) once the tests pass on main.
+  # Needs Settings -> Pages -> Source: "GitHub Actions" (the repository setup enables it).
+  deploy:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble the site
+        run: |
+          mkdir _site
+          cp -R index.html manifest.webmanifest sw.js js icons _site/
+          mkdir _site/versions
+          for d in versions/*/; do
+            n=$(basename "$d")
+            mkdir -p "_site/versions/$n"
+            cp -R "$d/index.html" "$d/js" "_site/versions/$n/"
+          done
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

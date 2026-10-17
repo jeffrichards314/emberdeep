@@ -104,6 +104,7 @@
         else if (sel === 'opt:effects') { const d = inp.consume('left') ? -1 : inp.consume('right') ? 1 : a === 'opt:effects' ? 1 : 0; if (d) { s.effects = (((s.effects === undefined ? 2 : s.effects | 0) + d) % 3 + 3) % 3; ED.save.save(); g.sfx('ui'); } }
         else if (sel === 'opt:assist') { const d = inp.consume('left') ? -1 : inp.consume('right') ? 1 : a === 'opt:assist' ? 1 : 0; if (d) { s.assist = (((s.assist | 0) + d) % 3 + 3) % 3; ED.save.save(); g.sfx('ui'); } }
         if (a === 'keys') { UI.confirm = null; M.go(g, 'keys'); return; }
+        if (a === 'touchopts' && ED.sceneImpl.touchopts) { UI.confirm = null; M.go(g, 'touchopts'); return; }
         if (a === 'export') M.exportSave(g); else if (a === 'import') M.importSave(g);
         if (a === 'reset') { if (UI.confirm === 'reset') { ED.save.reset(); UI.confirm = null; g.toast && g.toast('Save data erased', '#ff6a6a'); } else UI.confirm = 'reset'; }
         if (a === 'back' || inp.consume('back')) { const to = UI.back || 'title'; UI.confirm = null; if (to === 'paused') { g.scene = 'paused'; UI.navSel = null; } else M.go(g, to); }
@@ -135,6 +136,11 @@
       if (g.scene === 'settings' && g.run && UI.back === 'paused') { /* keep world frozen */ }
     },
     editSeed(g) {
+      if (ED.touch && ED.touch.active()) {                      // no hardware keyboard: the browser's own text box
+        const t = ED.touch.promptText('Seed (letters and numbers, up to 12). The same seed makes the same dungeon:', UI.seedText);
+        if (t !== null) UI.seedText = ED.normalizeSeed(t.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toUpperCase());
+        return;
+      }
       UI.seedEdit = true;
       ED.input.textCapture = (key, code, ev) => {
         if (code === 'Enter' || code === 'Escape' || code === 'Tab') { UI.seedEdit = false; ED.input.textCapture = null; UI.seedText = ED.normalizeSeed(UI.seedText); return true; }
@@ -159,9 +165,16 @@
     cancelRebind() { UI.rebind = null; ED.input.textCapture = null; },
     exportSave(g) {
       const txt = ED.save.exportText();
-      try { if (root.navigator && root.navigator.clipboard) { root.navigator.clipboard.writeText(txt); g.toast('Save copied to the clipboard (' + Math.round(txt.length / 1024 * 10) / 10 + ' KB) — keep it somewhere safe', '#6ee07a', 220); g.sfx('uiok'); return; } } catch (e) { /* fall through */ }
-      if (typeof root.prompt === 'function') { root.prompt('Copy your save data (Ctrl/Cmd+C):', txt); return; }
-      g.toast('Could not reach the clipboard here', '#ff9a6a', 160);
+      const fallback = () => { if (typeof root.prompt === 'function') { root.prompt('Copy your save data (Ctrl/Cmd+C):', txt); return; } g.toast('Could not reach the clipboard here', '#ff9a6a', 160); };
+      try {
+        if (root.navigator && root.navigator.clipboard) {
+          const done = () => { g.toast('Save copied to the clipboard (' + Math.round(txt.length / 1024 * 10) / 10 + ' KB) — keep it somewhere safe', '#6ee07a', 220); g.sfx('uiok'); };
+          const w = root.navigator.clipboard.writeText(txt);
+          if (w && typeof w.then === 'function') w.then(done, fallback); else done();            // a refused write (no permission / not a tap) falls back to the text box instead of claiming success
+          return;
+        }
+      } catch (e) { /* fall through */ }
+      fallback();
     },
     importSave(g, text) {                       // `text` lets tests (and a future paste box) skip the browser prompt
       if (text === undefined && typeof root.prompt !== 'function') { g.toast('Import needs a browser that can show a prompt', '#ff9a6a', 160); return; }
@@ -267,7 +280,7 @@
       UI.button(c, 'seed', UI.seedEdit ? UI.seedText + (Math.floor(UI.t / 20) % 2 ? '_' : ' ') : (UI.seedText || '(random)'), 150, 380, 280, 36, { size: 18, color: '#7fd8ff', selected: UI.seedEdit });
       UI.button(c, 'rand', 'Random', 440, 380, 110, 36, { size: 14 });
       UI.button(c, 'daily', 'Daily', 560, 380, 90, 36, { size: 14 });
-      UI.text(c, UI.seedEdit ? 'Type letters/numbers, Enter to confirm' : 'Click the seed (or press Enter on it) to type your own. Same seed = same dungeon.', 90, 440, 12, '#8a8aa8', 'left', false);
+      UI.text(c, UI.seedEdit ? 'Type letters/numbers, Enter to confirm' : (ED.touch && ED.touch.active() ? 'Tap the seed to type your own. Same seed = same dungeon.' : 'Click the seed (or press Enter on it) to type your own. Same seed = same dungeon.'), 90, 440, 12, '#8a8aa8', 'left', false);
       if (best) UI.text(c, 'Best on this seed: floor ' + best, 690, 404, 14, '#ffd24a', 'left');
       UI.button(c, 'go', 'BEGIN DESCENT', C.W / 2 - 160, 480, 320, 54, { size: 22, color: '#ffb04a' });
       UI.button(c, 'back', 'Back', C.W / 2 - 160, 546, 320, 34, { size: 14 });
@@ -288,7 +301,7 @@
     drawHelp(g, c) {
       UI.shadow(c, 'CONTROLS', C.W / 2, 70, 34, '#ffd24a', 'center');
       const I = ED.input, def = I.isDefault();
-      const rows = [['Move', def ? 'WASD / Arrow keys' : ['up', 'left', 'down', 'right'].map(a => I.label(a)).join('  ·  ')], ['Attack', def ? 'Space / J / Left click (mouse aims)' : I.label('attack') + ' / Left click (mouse aims)'], ['Dash (i-frames)', def ? 'K / Shift' : I.label('dash')], ['Interact / Buy / Take', def ? 'E' : I.label('interact')], ['Active ability', def ? 'Q' : I.label('active')], ['Place bomb', def ? 'B' : I.label('bomb')], ['Pause', 'Esc / P'], ['Mute / Fullscreen', 'M / F'], ['Debug mode', '` (backtick)']];
+      const rows = ED.touch && ED.touch.active() ? [['Move', 'Drag the left side (thumb stick)'], ['Attack', 'Hold ATTACK, drag to aim'], ['Dash (i-frames)', 'DASH button'], ['Interact / Buy / Take', 'USE button (glows near things)'], ['Active ability', 'Lightning button'], ['Place bomb', 'Bomb button'], ['Pause', 'Pause button (top corner)'], ['Big map', 'Hold the MAP button'], ['Back (menus)', 'X button, top left']] : [['Move', def ? 'WASD / Arrow keys' : ['up', 'left', 'down', 'right'].map(a => I.label(a)).join('  ·  ')], ['Attack', def ? 'Space / J / Left click (mouse aims)' : I.label('attack') + ' / Left click (mouse aims)'], ['Dash (i-frames)', def ? 'K / Shift' : I.label('dash')], ['Interact / Buy / Take', def ? 'E' : I.label('interact')], ['Active ability', def ? 'Q' : I.label('active')], ['Place bomb', def ? 'B' : I.label('bomb')], ['Pause', 'Esc / P'], ['Mute / Fullscreen', 'M / F'], ['Debug mode', '` (backtick)']];
       rows.forEach((r, i) => { UI.text(c, r[0], 230, 130 + i * 30, 17, '#cfd0ee'); UI.text(c, r[1], 520, 130 + i * 30, 17, '#ffd24a'); });
       const tips = ['Doors lock while enemies live. Telegraphed attacks glow red: dash THROUGH them or away.', 'The Boss Key is carried by a mini boss. Find the right key for each locked door (colored by type).', 'Bomb cracked walls (B). Cursed, devil and shrine rooms show costs up front — mystery chests do not.', 'Every 5th floor is a MEGA BOSS. A rest room appears before it.'];
       tips.forEach((t2, i) => UI.text(c, '• ' + t2, 70, 428 + i * 24, 13, '#a8a8c8', 'left', false));
@@ -323,7 +336,8 @@
       const al = s.assist | 0, AS = ED.D.ASSIST;
       UI.button(c, 'opt:assist', 'Assist: ' + (al ? AS[al].name.toUpperCase() : 'OFF'), 230, 396, 500, 62, { size: 16, color: al ? '#ffb04a' : '#8a8aa8',
         sub: al ? 'Foes hit ' + Math.round((1 - AS[al].dmg) * 100) + '% softer, warn ' + Math.round((AS[al].tele - 1) * 100) + '% longer' + (AS[al].hp < 1 ? ', have 15% less HP' : '') + ' · next run · no personal bests' : 'Gentle / Easy: softer, slower foes for learning the game' });
-      UI.button(c, 'keys', 'Key bindings…' + (ED.input.isDefault() ? '' : '  (customised)'), 230, 464, 500, 34, { size: 14, color: '#7fd8ff' });
+      if (ED.touch && ED.touch.available()) { UI.button(c, 'keys', 'Key bindings…' + (ED.input.isDefault() ? '' : ' *'), 230, 464, 246, 34, { size: 14, color: '#7fd8ff' }); UI.button(c, 'touchopts', 'Touch controls…', 484, 464, 246, 34, { size: 14, color: '#7fd8ff' }); }
+      else UI.button(c, 'keys', 'Key bindings…' + (ED.input.isDefault() ? '' : '  (customised)'), 230, 464, 500, 34, { size: 14, color: '#7fd8ff' });
       UI.button(c, 'export', 'Export save', 230, 502, 246, 32, { size: 13, color: '#9ad0ff' }); UI.button(c, 'import', 'Import save', 484, 502, 246, 32, { size: 13, color: '#9ad0ff' });
       UI.button(c, 'reset', UI.confirm === 'reset' ? 'Really erase ALL save data? (click again)' : 'Reset save data', 230, 538, 500, 32, { size: 13, color: '#ff6a6a' });
       UI.button(c, 'back', 'Back', 230, 576, 500, 38, { size: 16 });

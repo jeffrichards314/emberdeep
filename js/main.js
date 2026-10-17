@@ -126,6 +126,7 @@
       while (this._acc >= C.DT && n < 5) { this.step(); this._acc -= C.DT; n++; }
       if (n >= 5) this._acc = 0;
       this.render();
+      if (ED.touch && ED.touch.ready) ED.touch.frame(this, dt);
       this._fpsAcc += dt; this._fpsN++;
       if (this._fpsAcc >= 0.5) { this.fps = Math.round(this._fpsN / this._fpsAcc); this._fpsAcc = 0; this._fpsN = 0; }
     } catch (err) { this._acc = 0; this.crash(err); }
@@ -165,6 +166,11 @@
     const g = ED.createGame(canvas);
     ED.game = g;
     if (root.addEventListener) root.addEventListener('blur', () => { if (g.scene === 'play' && !g.modal) { g.scene = 'paused'; ED.ui.navSel = null; } });
+    if (root.document && root.document.addEventListener) root.document.addEventListener('visibilitychange', () => {       // another tab / app in front: stop the clock and the music
+      if (root.document.hidden && g.scene === 'play' && !g.modal) { g.scene = 'paused'; ED.ui.navSel = null; }
+      if (ED.audio && ED.audio.suspend) ED.audio.suspend(!!root.document.hidden);
+    });
+    if (ED.touch && ED.touch.init) ED.touch.init(canvas, g);
     if (ED.debug) ED.debug.init(g);
     g.start();
     return g;

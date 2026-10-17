@@ -51,9 +51,11 @@
       });
       window.addEventListener('blur', () => { I.keys = {}; I.acts = {}; I.mouse.down = false; });
       canvas.addEventListener('mousemove', e => {
+        if (I.recentTouch()) return;
         const r = rect(); I.mouse.x = (e.clientX - r.left) * (960 / r.width); I.mouse.y = (e.clientY - r.top) * (640 / r.height); I.mouse.moved = true;
       });
       canvas.addEventListener('mousedown', e => {
+        if (I.recentTouch()) return;
         const r = rect(); I.mouse.x = (e.clientX - r.left) * (960 / r.width); I.mouse.y = (e.clientY - r.top) * (640 / r.height);
         if (e.button === 0) { I.mouse.down = true; I.mouse.clicked = true; I.mouse.aim = true; }
         if (e.button === 2) { I.mouse.rclicked = true; }
@@ -88,17 +90,23 @@
     label(a) { const n = I.names(a); return n.length ? n.join(' / ') : '—'; },
     key1(a) { const n = I.names(a); return n.length ? n[0] : '—'; },
     /** on-screen hints written as "[E] Buy" follow the rebinding */
-    relabel(str) { return typeof str === 'string' && str.indexOf('[E]') >= 0 ? str.split('[E]').join('[' + I.key1('interact') + ']') : str; },
+    relabel(str) { return typeof str === 'string' && str.indexOf('[E]') >= 0 ? str.split('[E]').join('[' + (I.touchOn() ? 'USE' : I.key1('interact')) + ']') : str; },
     _anyDown(a) { for (const c of MAP[a]) if (I.keys[c]) return true; return false; },
     padHeld: {}, padEdge: {}, padAxis: { x: 0, y: 0 }, aimVec: null, padName: null,
+    /** touch.js owns this object: {on, held, latch, axis, aim}.  `on` is true only while the touch controls are driving the game (so a desktop never reads it) */
+    touchState: null, lastTouch: -1e9,
+    touchOn() { return !!(I.touchState && I.touchState.visible); },
+    /** the browser follows a finger tap with fake mouse events; they must not move the mouse a second time */
+    recentTouch() { return typeof performance !== 'undefined' && performance.now() - I.lastTouch < 700; },
     held(a) { return !!(I.acts[a] || I.edge[a] || (I.sim && I.sim.held[a]) || I.padHeld[a] || (a === 'attack' && (I.mouse.down || I.mouse.clicked))); },   // a tap shorter than one frame still counts for that frame
     pressed(a) { return !!(I.edge[a] || (I.sim && I.sim.edge[a]) || I.padEdge[a] || (a === 'attack' && I.mouse.clicked)); },
     /** gamepad (standard mapping): sticks/dpad move, X/RT attack, A/RB dash, B interact, Y/LB active, LT bomb, Start pause */
     poll() {
-      if (typeof navigator === 'undefined' || !navigator.getGamepads) return;
-      let gp = null; try { const pads = navigator.getGamepads(); for (const q of pads) if (q && q.connected) { gp = q; break; } } catch (e) { return; }
       const prev = I.padHeld, cur = {};
-      I.padAxis = { x: 0, y: 0 }; I.aimVec = null; I.padName = gp ? gp.id : null;
+      I.padAxis = { x: 0, y: 0 }; I.aimVec = null; I.padName = null;
+      let gp = null;
+      if (typeof navigator !== 'undefined' && navigator.getGamepads) { try { const pads = navigator.getGamepads(); for (const q of pads) if (q && q.connected) { gp = q; break; } } catch (e) { gp = null; } }
+      I.padName = gp ? gp.id : null;
       if (gp) {
         const b = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
         const lx = gp.axes[0] || 0, ly = gp.axes[1] || 0, rx = gp.axes[2] || 0, ry = gp.axes[3] || 0;
@@ -106,6 +114,15 @@
         cur.attack = b(2) || b(7); cur.dash = b(0) || b(5); cur.interact = b(1); cur.active = b(3) || b(4); cur.bomb = b(6); cur.pause = b(9); cur.confirm = b(0); cur.back = b(1) && false;
         const dz = 0.22; if (Math.hypot(lx, ly) > dz) { I.padAxis = { x: lx, y: ly }; }
         if (Math.hypot(rx, ry) > 0.4) { I.aimVec = { x: rx, y: ry }; I.mouse.aim = false; }
+      }
+      // touch controls (touch.js): buttons are held while a finger is down and latched so a tap shorter than one step still counts once
+      const T = I.touchState;
+      if (T && T.on) {
+        for (const a in T.held) if (T.held[a]) cur[a] = true;
+        for (const a in T.latch) if (T.latch[a]) cur[a] = true;
+        T.latch = {};
+        if (T.axis && (T.axis.x || T.axis.y)) I.padAxis = { x: T.axis.x, y: T.axis.y };
+        if (T.aim) { I.aimVec = { x: T.aim.x, y: T.aim.y }; I.mouse.aim = false; }
       }
       I.padEdge = {};
       for (const a in cur) if (cur[a] && !prev[a]) I.padEdge[a] = true;

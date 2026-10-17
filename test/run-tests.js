@@ -567,6 +567,9 @@ section('10. Random-input fuzz (crash hunting)');
 // ------------------------------------------------------------------ pack sections (only run for packs that are ON)
 require('./pack-tests')({ ED, sandbox, ok, section, newGame, stepN, Bot, quick, bossFight, giveKit, reapply() { ED.packs.force(require('./harness').packsFromEnv ? null : null); if (process.env.ED_PACKS) ED.packs.force(ED.packs.parse(process.env.ED_PACKS)); } });
 
+// ------------------------------------------------------------------ touch controls (core, every edition)
+await require('./touch-tests')({ ED, sandbox, ok, section, newGame, stepN, Bot, quick });
+
 ok(scriptErrors === 0, 'no swallowed script errors during the whole run (' + scriptErrors + ')');
 // ------------------------------------------------------------------ summary
 console.log('\n' + '='.repeat(60));

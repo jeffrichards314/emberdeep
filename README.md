@@ -27,6 +27,17 @@ npx serve .                     # or any static server
 The game uses classic `<script>` tags (no ES modules), so it needs nothing but a modern browser.
 Progress (unlocks, best floors, settings) is saved in `localStorage`.
 
+## Play on a phone or tablet
+
+Open the game's address in any modern mobile browser (it is a static site: GitHub Pages, any web server, or `python3 serve.py` on your computer and the computer's address on your Wi-Fi). Touch controls switch themselves on when the device has a touch screen; **landscape is the comfortable way to play** (portrait works too: the picture sits on top and the controls underneath).
+
+* **Move:** put a thumb anywhere on the left half and drag — a floating stick appears under it; push gently to walk slowly.
+* **Attack:** hold the big ATTACK button. Without a drag it shoots at the nearest foe; drag the thumb while holding it to aim yourself (let go of the drag and it aims itself again).
+* **DASH, USE** (it glows when something is in reach), **lightning** (active ability) and **bomb** sit on an arc around ATTACK; **PAUSE**, **MAP** (hold) and the three belt slots (v7) are in the top corner. Menus are plain taps (a finger that just misses a button still hits the nearest one) and the **X** at the top left stands in for Esc.
+* **Options → Touch controls…** (shown on touch devices): always on / auto / off, button size, look (opacity), left-handed layout, auto-aim, vibration (Android), full screen, and how to install. `?touch=1` / `?touch=0` on the address forces the controls on/off for one visit (handy on a laptop).
+* **Install it:** Safari → Share → *Add to Home Screen*; Chrome → menu → *Install app*. It then opens full screen, works offline (a small service worker keeps a copy, always preferring the newest version when online) and — on iPhone/iPad — keeps your save safe: Safari may erase the data of websites you have not opened for a week, an installed app is exempt. Either way, **Options → Export save** gives you a backup you can paste back in on any device.
+* The page pauses when you switch apps, keeps the screen awake while you play where the browser allows it, and lowers its own drawing resolution (never the game speed) if a slow phone cannot hold the frame rate.
+
 ## Versions (the update toggle)
 
 EMBERDEEP ships as **v1 plus switchable content updates**. Open **VERSIONS** (top-right of the title screen) to turn each update on or off
@@ -222,6 +233,8 @@ for your next run, or use the presets along the top (`v1 only`, `v2`, `v3` … s
 
 **Save safety (Options):** *Export save* copies your whole save (unlocks, bests, settings, bindings, rosters, mastery) as text; *Import save* replaces the current save from pasted text (junk is refused, nothing unsafe is applied). Progress lives in this browser's localStorage, so export before clearing site data.
 
+**Touch** (phones and tablets, see [Play on a phone or tablet](#play-on-a-phone-or-tablet)): left-side thumb stick moves · hold ATTACK shoots (drag it to aim, or it picks the nearest foe) · DASH / USE / lightning / bomb buttons · PAUSE and hold-MAP in the corner · X (top left) goes back in menus.
+
 Gamepad (standard mapping): sticks/D-pad move, right stick aims, X/RT attack, A/RB dash, B interact,
 Y/LB active, LT bomb, Start pause. *(Implemented but untested on real hardware — see limitations.)*
 
@@ -294,6 +307,7 @@ node test/matrix.js                           # parity + v1 alone + each update 
 node --expose-gc test/run-tests.js            # full suite for the currently saved/forced edition (~45 s)
 node --expose-gc test/run-tests.js --quick --packs=none|all|v2,v4   # smaller counts; pick the edition
 node test/parity.js [N]                       # is "all updates off" identical to the frozen v1 in versions/v1 ?
+node test/touch.js                            # just the touch-control + service-worker tests (a few seconds; also part of every run-tests.js run)
 ```
 
 The suite loads the game in Node (script order from `index.html`, fake canvas, seeded `Math.random`, so failures reproduce) and checks, for the active edition:
@@ -322,7 +336,9 @@ rendering are separate: `generator`/`keys`/`rooms` build data, `entities`/`comba
 | `guide.js` | the in-game Guide pages (one per update) and their scene |
 | `save.js` | persistent meta: unlocks, best floors, per-seed bests, settings |
 | `difficulty.js` | **the** scaling table + wave composer, room/rarity weights, boss tiers |
-| `input.js` · `audio.js` | keyboard/mouse/gamepad → actions · WebAudio SFX + reactive generative music |
+| `input.js` · `audio.js` | keyboard/mouse/gamepad/touch → actions · WebAudio SFX + reactive generative music |
+| `touch.js` | **touch controls**: DOM overlay (stick, buttons), screen layout maths, tap snapping, auto-aim, the *Touch controls* options scene; feeds `ED.input.touchState` (inert without a touch screen) |
+| `sw.js` · `manifest.webmanifest` · `icons/` · `tools/make-icons.js` | installable app: offline service worker (network first), manifest, icons drawn by a script |
 | `items.js` | weapons, affixes, armor, actives, relics, synergies, classes, stat aggregation |
 | `rooms.js` | tile layouts (19 templates, 10 boss arenas), door geometry, themes, room-type registry |
 | `specials.js` | runtime behaviour of every special room + switch/brazier puzzles |
@@ -412,7 +428,7 @@ clearance and fills any unreachable pocket, so a bad template cannot break conne
 * Keyboard-only aiming is 8-way facing + soft aim-assist; mouse (or a right stick) gives free aim.
 * `localStorage` can be unavailable (private windows / some `file://` configurations) — the game then runs normally but
   progress is not saved.
-* No key rebinding, no touch controls.
+* **Touch controls** are verified by tests (layout maths for 11 screen shapes in both hands, the input merge, a real run driven through the touch state, the offline worker) and driven by synthetic touches in a phone-sized browser pane — **not yet on a physical phone or tablet** (feel, thumb reach and frame rate on real hardware are untested). The 960×640 canvas is scaled to the screen, so on a phone the small HUD text is small (a tablet or a large phone in landscape is much better). Vibration works only where the browser has `navigator.vibrate` (Android); iPhone Safari has no full-screen API (install the app instead).
 * The updates were tuned with the same bots (and a handful of mortal-bot balance probes per class); expect to tweak Heat pacts, hazard frequencies (`HZ` in `pack_v3.js`) and boss numbers to taste.
 * **Balance (mortal-bot probe, `node test/balance.js 20 <class>`; the bot dodges mediocrely, so read medians, not absolutes):** with everything on, most classes die around floor 5 (target 5–7), Warden has a long right tail (mean ~7) and Necromancer / Alchemist / Lancer / Mage / Ranger / Brute sit at 5. The v1 **Rogue** (4 hearts, short-range daggers) is the hardest class — the bot dies to the first boss in almost every run — and the v1 **Trickster** is weak too; both are left alone on purpose because the v1 edition is frozen. The v2 **Monk** was the weakest update class, so Gauntlets now hit for 3.8 (was 3.4) and Flow lingers 1.8s (was 1.3s): v2-only median floor 3 → 4.
 * **Error safety:** the browser loop re-arms itself before doing anything and catches every exception (a toast says something went wrong and the console has the details; if it repeats every frame the game pauses so you can leave). In the browser a failing update hook is isolated: it is reported, and after 3 errors that one hook is switched off while the run goes on. The test suite runs with this off (`ED.hooksSafe = false`) so real bugs still throw.
