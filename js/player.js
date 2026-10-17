@@ -45,7 +45,7 @@
     aimAngle() {
       const p = this.player, m = I().mouse, av = I().aimVec;
       if (av) return Math.atan2(av.y, av.x);
-      if (m.aim) return Math.atan2(m.y - C.HUD - p.y, m.x - p.x);
+      if (m.aim) return Math.atan2(m.y + (ED.cam.on ? ED.cam.y : 0) - C.HUD - p.y, m.x - p.x);
       let a = p.face, best = null, bd = 1e9;
       for (const e of this.enemies) {
         if (e.dead || e.invuln) continue;

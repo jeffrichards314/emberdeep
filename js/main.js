@@ -3,6 +3,9 @@
   'use strict';
   const ED = root.ED, U = ED.U, D = ED.D, C = ED.C;
 
+  /** the camera of a zoomed picture (touch.js "fill the screen"): `on` while the room is drawn cropped, `y` = how far down the room the window starts, `h` = the canvas height in game pixels */
+  ED.cam = { on: false, y: 0, h: C.H };
+
   function Game(canvas, opts) {
     opts = opts || {};
     this.canvas = canvas; this.headless = !!opts.headless;
@@ -102,6 +105,7 @@
   G.render = function () {
     const ctx = this.ctx; if (!ctx) return;
     const cv = this.canvas;
+    if (ED.touch && ED.touch.ready) ED.touch.view(this);              // a touch screen may zoom the picture to fill it (canvas size + camera)
     const s = cv.width / C.W;
     ctx.setTransform(s, 0, 0, s, 0, 0);
     ctx.fillStyle = '#07060c'; ctx.fillRect(0, 0, C.W, C.H);
@@ -110,7 +114,12 @@
       case 'intro': ED.render.world(this, ctx); ED.ui.drawFloorIntro(this, ctx); break;
       default: if (ED.sceneImpl[this.scene]) { ED.ui.drawMenu(this, ctx); break; }       // update scenes (Hearth, Records, Hunt, Legacy...) never draw the world of a finished run under themselves
       case 'play': case 'paused': case 'dead': case 'victory':
-        if (this.floor) { ED.render.world(this, ctx); ED.ui.drawHud(this, ctx); }
+        if (this.floor) {
+          if (ED.cam.on && this.scene === 'play') {                     // zoomed: only the room scrolls; the HUD is laid out for the shorter canvas and stays put
+            ctx.save(); ctx.translate(0, -ED.cam.y); ED.render.world(this, ctx); ctx.restore();
+            const h0 = C.H; C.H = ED.cam.h; try { ED.ui.drawHud(this, ctx); } finally { C.H = h0; }
+          } else { ED.render.world(this, ctx); ED.ui.drawHud(this, ctx); }
+        }
         ED.ui.drawOverlay(this, ctx);
         break;
     }

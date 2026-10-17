@@ -225,4 +225,69 @@ module.exports = async function (ctx) {
     nav.clipboard = was; delete sandbox.prompt;
     M.go(g, 'title'); reset();
   }
+
+  section('T6. Touch: zoom to fill (the zoomed picture, the camera, the HUD)');
+  {
+    reset(); const C_H0 = C.H;
+    // the zoomed box
+    const zb = (w, h, l, r, tp, b) => T.zoomBox(w, h, { l: l || 0, r: r || 0, t: tp || 0, b: b || 0 });
+    let z = zb(852, 393); ok(z && Math.abs(z.H - 442.82) < 0.05 && z.x === 0 && z.w === 852 && z.h === 393, 'iPhone sideways: 852x393 fills edge to edge, ' + Math.round(z.H) + ' game px tall');
+    z = zb(852, 393, 59, 59, 0, 21); ok(z && Math.abs(z.x - 59) < 1e-6 && z.y === 0 && Math.abs(z.w - 734) < 0.01 && z.h === 372 && Math.abs(z.H - 486.58) < 0.05, 'with the notch and home bar the picture fills the SAFE area (' + Math.round(z.w) + 'x' + z.h + ')');
+    ok(zb(1024, 768) === null && zb(1366, 1024) === null && zb(768, 1024) === null && zb(390, 844) === null, 'tablets and portrait: no zoom (the picture already fills the width)');
+    z = zb(1000, 400); ok(z && z.H === 440 && z.w < 1000 && Math.abs(z.x - (1000 - z.w) / 2) < 1e-6, 'a very wide screen keeps at least 440 game px of height and centres the picture');
+    ok(zb(100, 80, 60, 60) === null && zb(300, 40) === null && zb(0, 0) === null, 'a degenerate screen (insets eat the width, or almost no height) never yields a box');
+    let bad = [];
+    for (const [w, h, l, r, tp, b] of [[852, 393, 59, 59, 0, 21], [844, 390, 47, 47, 0, 21], [932, 430, 59, 59, 0, 21], [740, 360, 0, 0, 0, 0], [667, 375, 44, 44, 0, 21], [1280, 720, 0, 0, 0, 0], [800, 600, 0, 0, 0, 0], [2000, 700, 0, 0, 0, 0]]) {
+      const q = zb(w, h, l, r, tp, b); if (!q) { if (w / h > 1.55) bad.push(w + 'x' + h + ' should zoom'); continue; }
+      if (q.H < 440 - 1e-9 || q.H > 640 || Math.abs(q.w / q.h - 960 / q.H) > 1e-6 || q.x < l - 1e-6 || q.x + q.w > w - r + 1e-6 || q.y < tp - 1e-6 || q.y + q.h > h - b + 1e-6 || Math.abs(q.scale - q.w / 960) > 1e-9) bad.push(w + 'x' + h + ' ' + JSON.stringify(q));
+    }
+    ok(bad.length === 0, 'zoom boxes: inside the safe area, never distorted (aspect = 960/H), 440 <= H <= 640 (' + (bad[0] || 'ok') + ')');
+    // controls in the zoomed picture
+    bad = [];
+    for (const [w, h, l, r, tp, b] of [[852, 393, 59, 59, 0, 21], [844, 390, 47, 47, 0, 21], [932, 430, 59, 59, 0, 21], [667, 375, 44, 44, 0, 21], [740, 360, 0, 0, 0, 0], [1280, 720, 0, 0, 0, 0]]) for (const hand of ['right', 'left']) for (const size of T.SIZES) {
+      const ins = { l, r, t: tp, b }, L = T.layout(w, h, ins, { size, hand, zoom: true }), tag = w + 'x' + h + ' ' + hand + ' x' + size; if (!L) { bad.push(tag + ' no layout'); continue; }
+      if (!T.sound(L, w, h, ins)) bad.push(tag + ' unsound');
+      const hudBottom = L.cv.y + 64 * L.cv.scale; for (const id of ['pause', 'map', 'item1', 'item2', 'item3']) { const p = L.btn[id]; if (p.y - p.d / 2 < hudBottom - 0.5) bad.push(tag + ' ' + id + ' covers the HUD bar'); if (p.x > w / 2) bad.push(tag + ' ' + id + ' is not top-left'); }
+      if (hand === 'right' ? !(L.btn.attack.x > w / 2 && L.stick.x < w / 2) : !(L.btn.attack.x < w / 2 && L.stick.x > w / 2)) bad.push(tag + ' wrong side for the hand');
+    }
+    ok(bad.length === 0, 'zoomed controls: sound for 6 screens x 2 hands x 3 sizes, small buttons under the HUD bar (' + (bad.slice(0, 3).join('; ') || 'ok') + ')');
+    ok(T.layout(1024, 768, null, { zoom: true }) === null && T.layout(390, 844, null, { zoom: true }) === null, 'no zoomed layout where there is no zoom');
+    // the camera
+    const roomH = C.ROOM_H, vis = 379, max = roomH - vis;
+    ok(T.camFollow(0, 200, vis, roomH) === 0 && T.camFollow(50, 250, vis, roomH) === 50, 'camera: stays put while the hero is well inside the window');
+    ok(T.camFollow(0, 560, vis, roomH, true) === max && T.camFollow(0, 10, vis, roomH, true) === 0 && Math.abs(T.camFollow(0, 288, vis, roomH, true) - (288 - vis / 2)) < 1e-9, 'camera: a snap centres on the hero and clamps to the room');
+    ok(T.camFollow(0, 500, vis, roomH) > 0 && T.camFollow(0, 500, vis, roomH) < 500 - vis + 110, 'camera: eases towards a hero near the bottom edge (does not jump)');
+    ok(T.camFollow(400, 300, vis, roomH) <= max && T.camFollow(-50, 100, vis, roomH) >= 0, 'camera: a stale position (after a rotation changed the window) is pulled back into range');
+    let y = 0, outside = 0, nan = 0, maxStep = 0; for (let py = 60; py <= 520; py += 6) { const ny = T.camFollow(y, py, vis, roomH); maxStep = Math.max(maxStep, Math.abs(ny - y)); y = ny; if (!isFinite(y)) nan++; if (py < y || py > y + vis) outside++; }
+    for (let py = 520; py >= 60; py -= 6) { const ny = T.camFollow(y, py, vis, roomH); y = ny; if (!isFinite(y)) nan++; if (py < y || py > y + vis) outside++; }
+    ok(nan === 0 && outside === 0 && y >= 0 && y <= max, 'camera: a hero running the room top to bottom and back is always in view (' + outside + ' frames out of view)');
+    for (let i = 0; i < 80; i++) y = T.camFollow(y, 300, vis, roomH); ok(y >= 0 && y <= max && 300 >= y && 300 <= y + vis, 'camera: settles with the hero in view');
+    ok(T.zoomRoom({ type: 'normal' }, []) && T.zoomRoom({ type: 'shop' }, [{ boss: false }, { dead: true, boss: true }]) && T.zoomRoom(null, null), 'zoom: ordinary rooms, shops and rooms whose boss is already dead are zoomed');
+    ok(!T.zoomRoom({ type: 'boss' }, []) && !T.zoomRoom({ type: 'miniboss' }, []) && !T.zoomRoom({ type: 'normal' }, [{ x: 1 }, { boss: true }]), 'zoom: boss and mini-boss arenas and any live boss get the whole picture');
+    // drawing through the camera (headless: ED.cam is set by hand, touch.js's DOM half is not needed)
+    const g = newGame(); g.startRun('T6', 'knight'); g.scene = 'play'; g.introT = 999; for (let i = 0; i < 5; i++) g.step();
+    const log = [], real = g.ctx, tc = new Proxy(real, { get(t, k) { if (k === 'translate') return (a, b) => { log.push('translate ' + a + ',' + b); }; if (k === 'save' || k === 'restore') return () => { log.push(String(k)); }; const v = t[k]; return typeof v === 'function' ? v.bind(t) : v; }, set(t, k, v) { t[k] = v; return true; } }); g.ctx = tc;
+    const w0 = ED.render.world, h0 = ED.ui.drawHud; let worldH = null, hudH = null; ED.render.world = function () { worldH = C.H; log.push('world'); return w0.apply(this, arguments); }; ED.ui.drawHud = function () { hudH = C.H; log.push('hud'); return h0.apply(this, arguments); };
+    try {
+      ED.cam.on = false; g.render(); ok(!log.some(l => l === 'translate 0,-100') && worldH === 640 && hudH === 640, 'camera off: the picture is drawn exactly as before (C.H 640 for both)');
+      log.length = 0; ED.cam.on = true; ED.cam.y = 100; ED.cam.h = 487; g.render();
+      ok(log.indexOf('translate 0,-100') >= 0 && log.indexOf('translate 0,-100') < log.indexOf('world') && log.indexOf('world') < log.indexOf('restore', log.indexOf('world')) && log.indexOf('restore', log.indexOf('world')) < log.indexOf('hud'), 'camera on: the room is drawn translated by -camY inside save/restore, then the HUD');
+      ok(worldH === 640 && hudH === 487 && C.H === 640, 'camera on: the room sees C.H 640, the HUD sees the zoomed canvas height (487), and C.H is restored (' + C.H + ')');
+      log.length = 0; g.scene = 'paused'; g.render(); ok(!log.some(l => l === 'translate 0,-100') && hudH === 640, 'paused: whole picture even if the camera flag is left on'); g.scene = 'play';
+      ED.ui.drawHud = function () { throw new Error('boom'); }; let thrown = false; try { g.render(); } catch (e) { thrown = true; } ok(thrown && C.H === 640, 'a HUD that throws still leaves C.H restored');
+    } finally { ED.render.world = w0; ED.ui.drawHud = h0; g.ctx = real; ED.cam.on = false; ED.cam.y = 0; ED.cam.h = 640; C.H = C_H0; }
+    // things anchored to the room follow the camera
+    const UI = ED.ui, o = UI.drawLinesPanel; let Y = null; UI.drawLinesPanel = function (c, name, col, lines, X, y) { Y = y; }; 
+    try {
+      const it = g.addInter({ type: 'service', x: 300, y: 200, r: 16, range: 50, name: 'Thing', color: '#fff', desc: 'd', price: () => 10, use() {} }); g.nearInter = it;
+      UI.drawInterPanel(g, g.ctx); const y0 = Y; ED.cam.on = true; ED.cam.y = 100; UI.drawInterPanel(g, g.ctx); ok(y0 !== null && Y === y0 - 100, 'the interaction panel moves with the camera (' + y0 + ' -> ' + Y + ')');
+    } finally { UI.drawLinesPanel = o; ED.cam.on = false; ED.cam.y = 0; g.nearInter = null; }
+    // aiming with a mouse in a zoomed picture is still aimed at the room, not the screen
+    const p = g.player; p.x = 480; p.y = 300; I.mouse.aim = true; I.mouse.x = 480; I.mouse.y = 64 + 300 + 50 - 100; ED.cam.on = true; ED.cam.y = 100; I.aimVec = null;
+    ok(Math.abs(g.aimAngle() - Math.PI / 2) < 1e-9, 'mouse aim: the point 50px below the hero in the room is straight down even with the camera scrolled'); ED.cam.on = false; I.mouse.y = 64 + 300 + 50; ok(Math.abs(g.aimAngle() - Math.PI / 2) < 1e-9, 'mouse aim: unchanged without the camera'); I.mouse.aim = false; ED.cam.y = 0;
+    // settings
+    const S = ED.save.meta.settings; delete S.touch; ok(T.cfg().fit === 'fill', 'default screen mode: fill'); S.touch = { fit: 'fit' }; ok(T.cfg().fit === 'fit', 'fit is remembered'); S.touch = { fit: 'zoom!' }; ok(T.cfg().fit === 'fill', 'garbage screen mode: fill'); delete S.touch;
+    const gg = newGame(); const act = (a) => ED.sceneImpl.touchopts.update(gg, a, I); act('fit'); ok(T.cfg().fit === 'fit' && S.touch.fit === 'fit', 'Options: Screen toggles to FIT and is saved'); act('fit'); ok(T.cfg().fit === 'fill', '... and back to FILL'); delete S.touch; T.dirty = true;
+    ok(C.H === 640 && !ED.cam.on, 'the shared canvas height was left alone'); reset();
+  }
 };

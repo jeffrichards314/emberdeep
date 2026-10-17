@@ -256,7 +256,7 @@
     },
     drawInterPanel(g, c) {
       const it = g.nearInter; if (!it || g.modal) return;
-      const p = g.player, X = it.x, Y = it.y + C.HUD;
+      const p = g.player, X = it.x, Y = it.y + C.HUD - (ED.cam.on ? ED.cam.y : 0);          // (the panel sits by the thing in the room: follow the camera)
       let prompt = null;
       if (it.type === 'pedestal') {
         const cmp = it.item.cat === 'weapon' ? p.weapon : it.item.cat === 'armor' ? p.armor[it.item.slot] : null;

@@ -2,6 +2,8 @@
  *
  *  PLAY    a floating thumb stick on the left half of the screen (move), a big ATTACK button that also aims when you drag it (let go of the drag and it
  *          aims itself at the nearest foe), and DASH / USE / ACTIVE / BOMB on an arc around it; small PAUSE, MAP (hold) and belt buttons in the corner.
+ *  FILL    on a wide screen (an iPhone sideways is 2.2:1, the picture 1.5:1) the picture is zoomed until it fills the safe area edge to edge: the room is cropped top and bottom and a camera
+ *          follows the hero up and down while the HUD stays put.  Menus, pause and dialogs always show the whole picture.  Options -> Touch controls -> Screen switches it.
  *  MENUS   plain taps.  A finger that misses a button by a few pixels still hits the nearest one, and a small X button stands in for the Esc key.
  *  SEED    the seed field opens the browser's own text prompt (no hidden keyboard tricks).
  *
@@ -12,14 +14,15 @@
 (function (root) {
   'use strict';
   const ED = root.ED, U = ED.U, C = ED.C, I = ED.input;
-  const DEF = { mode: 'auto', size: 1, hand: 'right', opacity: 0.7, vib: 1, auto: 1 };
+  const DEF = { mode: 'auto', size: 1, hand: 'right', opacity: 0.7, vib: 1, auto: 1, fit: 'fill' };
+  const MINH = 440;                                                                    // the zoomed picture never gets shorter than this many game pixels (that is 62% of a room's height in view)
   const SIZES = [0.85, 1, 1.2], SIZE_NAMES = ['SMALL', 'MEDIUM', 'LARGE'], OPACS = [0.45, 0.7, 0.95], OPAC_NAMES = ['FAINT', 'NORMAL', 'SOLID'], MODES = ['auto', 'on', 'off'];
   const SCALES = [2, 1.5, 1.25, 1];                                                    // canvas pixels per game pixel, tried in this order when the phone cannot keep up
   /** the saved touch settings, every value checked (a hand-edited or imported save never reaches the layout as garbage) */
   const cfg = () => {
     const s = ED.save && ED.save.meta && ED.save.meta.settings, t = s && s.touch && typeof s.touch === 'object' ? s.touch : {};
     const on = (v, d) => v === 0 || v === false ? 0 : v === 1 || v === true ? 1 : d;
-    return { mode: MODES.indexOf(t.mode) >= 0 ? t.mode : DEF.mode, size: SIZES.indexOf(t.size) >= 0 ? t.size : DEF.size, hand: t.hand === 'left' ? 'left' : 'right', opacity: OPACS.indexOf(t.opacity) >= 0 ? t.opacity : DEF.opacity, vib: on(t.vib, DEF.vib), auto: on(t.auto, DEF.auto) };
+    return { mode: MODES.indexOf(t.mode) >= 0 ? t.mode : DEF.mode, size: SIZES.indexOf(t.size) >= 0 ? t.size : DEF.size, hand: t.hand === 'left' ? 'left' : 'right', opacity: OPACS.indexOf(t.opacity) >= 0 ? t.opacity : DEF.opacity, vib: on(t.vib, DEF.vib), auto: on(t.auto, DEF.auto), fit: t.fit === 'fit' ? 'fit' : 'fill' };
   };
 
   const BUTTONS = [
@@ -36,12 +39,13 @@
     { id: 'back', act: 'back', color: '#cfd0ee', icon: 'M6 6l12 12 M18 6L6 18', small: true, menu: true },
   ];
   const BY_ID = {}; for (const b of BUTTONS) BY_ID[b.id] = b;
+  const ROW = ['pause', 'map', 'item1', 'item2', 'item3'];                           // the small buttons
 
   // ------------------------------------------------------------------ pure helpers (no DOM: the tests call these directly)
   const T = ED.touch = {
     state: { on: false, visible: false, held: {}, latch: {}, axis: { x: 0, y: 0 }, aim: null },
     BUTTONS, SIZES, SIZE_NAMES, OPACS, OPAC_NAMES, SCALES, cfg,
-    ready: false, mode: 'none', level: 0,
+    ready: false, mode: 'none', level: 0, res0: 2, applied: null,
 
     /** where the canvas sits (CSS px): landscape = as large as fits, centred; portrait = full width at the top with the controls underneath */
     fitCanvas(vw, vh, ins) {
@@ -53,10 +57,35 @@
     },
     /** every control's place: {cv, portrait, u, zone, stick:{x,y,r}, btn:{id:{x,y,d}}} (x,y = centre).  The size asked for is only a wish: on a screen too small for it the controls shrink until nothing overlaps or leaves the safe area. */
     layout(vw, vh, ins, o) {
-      o = Object.assign({ size: 1, hand: 'right' }, o); ins = ins || { l: 0, r: 0, t: 0, b: 0 };
+      o = Object.assign({ size: 1, hand: 'right', zoom: false }, o); ins = ins || { l: 0, r: 0, t: 0, b: 0 };
+      const zb = o.zoom ? T.zoomBox(vw, vh, ins) : null;
+      if (o.zoom && !zb) return null;
       let L = null;
-      for (let k = o.size; k >= 0.5; k -= 0.05) { L = T.build(vw, vh, ins, k, o.hand); if (T.sound(L, vw, vh, ins)) break; }
+      for (let k = o.size; k >= 0.5; k -= 0.05) { L = T.build(vw, vh, ins, k, o.hand, zb); if (T.sound(L, vw, vh, ins)) break; }
       return L;
+    },
+    /** the zoom-to-fill picture: the safe area edge to edge, game pixels 0..H tall (H < 640: the room is cropped).  null where it would gain nothing (portrait, or a screen no wider than the picture). */
+    zoomBox(vw, vh, ins) {
+      ins = ins || { l: 0, r: 0, t: 0, b: 0 };
+      const aw = vw - ins.l - ins.r, ah = vh - ins.t - ins.b;
+      if (aw < 50 || ah < 50) return null;
+      const H = U.clamp(C.W * ah / aw, MINH, C.H);
+      if (H > C.H - 0.5) return null;
+      const w = Math.min(aw, ah * C.W / H);
+      return { x: ins.l + (aw - w) / 2, y: ins.t, w, h: ah, H, scale: w / C.W };
+    },
+    /** boss arenas and any fight with a boss need the whole room in view: no zoom there */
+    zoomRoom(room, enemies) {
+      if (room && (room.type === 'boss' || room.type === 'miniboss')) return false;
+      for (const e of enemies || []) if (e && e.boss && !e.dead) return false;
+      return true;
+    },
+    /** the camera: keep the hero inside the window with a margin, easing towards the target.  y = top of the window in room pixels (0 .. roomH - vis) */
+    camFollow(y, py, vis, roomH, snap) {
+      const max = Math.max(0, roomH - vis), m = Math.min(110, vis * 0.28);
+      let t = y; if (snap) t = py - vis / 2; else if (py < y + m) t = py - m; else if (py > y + vis - m) t = py - vis + m;
+      t = U.clamp(t, 0, max);
+      return U.clamp(snap ? t : y + (t - y) * 0.22, 0, max);
     },
     /** nothing leaves the safe area, no two play buttons (or the stick) touch */
     sound(L, vw, vh, ins) {
@@ -65,9 +94,9 @@
       for (let i = 0; i < ids.length; i++) { const a = L.btn[ids[i]]; if (Math.hypot(a.x - L.stick.x, a.y - L.stick.y) < a.d / 2 + L.stick.r) return false; for (let j = i + 1; j < ids.length; j++) { const c = L.btn[ids[j]]; if (Math.hypot(a.x - c.x, a.y - c.y) < (a.d + c.d) / 2 - 0.5) return false; } }
       return L.stick.x - L.stick.r >= ins.l - 0.5 && L.stick.x + L.stick.r <= vw - ins.r + 0.5 && L.stick.y + L.stick.r <= vh - ins.b + 0.5;
     },
-    build(vw, vh, ins, size, hand) {
+    build(vw, vh, ins, size, hand, zb) {
       const o = { size, hand };
-      const cv = T.fitCanvas(vw, vh, ins), portrait = cv.portrait;
+      const cv = zb ? { portrait: false, x: zb.x, y: zb.y, w: zb.w, h: zb.h, H: zb.H, scale: zb.scale } : T.fitCanvas(vw, vh, ins), portrait = cv.portrait;
       const u = Math.round(U.clamp(Math.min(vw, vh) * 0.15, 40, 78) * o.size), pad = Math.round(u * 0.3), A = Math.round(u * 1.5), s = Math.max(40, Math.round(u * 0.7));
       const rg = portrait ? { x0: ins.l, y0: cv.y + cv.h, x1: vw - ins.r, y1: vh - ins.b } : { x0: ins.l, y0: ins.t, x1: vw - ins.r, y1: vh - ins.b };
       const rh = rg.y1 - rg.y0, R = Math.round(u * 2.1), Rs = Math.round(u * 1.1);
@@ -78,14 +107,19 @@
       for (const b of BUTTONS) if (b.deg !== undefined) { const d = Math.round(u * b.k), a = b.deg * Math.PI / 180; btn[b.id] = { x: Math.round(ax + R * Math.cos(a)), y: Math.round(ay + R * Math.sin(a)), d }; }
       // small buttons: the top-right corner (landscape) or the top of the control area (portrait)
       const row1 = rg.y0 + pad / 2 + s / 2, gap = Math.round(s * 0.2);
-      btn.pause = { x: rg.x1 - pad / 2 - s / 2, y: row1, d: s };
-      btn.map = { x: btn.pause.x - s - gap, y: row1, d: s };
-      for (let i = 0; i < 3; i++) btn['item' + (i + 1)] = portrait ? { x: btn.map.x - (s + gap) * (3 - i), y: row1, d: s } : { x: rg.x1 - pad / 2 - s / 2 - (s + gap) * (2 - i), y: row1 + s + gap, d: s };
+      if (zb) {                                                                                  // zoomed: the picture's own top bar is full, so the small buttons sit in a row just under it, top left
+        let x = Math.max(zb.x, ins.l) + gap + s / 2; const y = zb.y + C.HUD * zb.scale + gap + s / 2;
+        for (const id of ROW) { btn[id] = { x, y, d: s }; x += s + gap; }
+      } else {
+        btn.pause = { x: rg.x1 - pad / 2 - s / 2, y: row1, d: s };
+        btn.map = { x: btn.pause.x - s - gap, y: row1, d: s };
+        for (let i = 0; i < 3; i++) btn['item' + (i + 1)] = portrait ? { x: btn.map.x - (s + gap) * (3 - i), y: row1, d: s } : { x: rg.x1 - pad / 2 - s / 2 - (s + gap) * (2 - i), y: row1 + s + gap, d: s };
+      }
       btn.back = { x: ins.l + pad / 2 + s / 2, y: (portrait ? cv.y : ins.t) + pad / 2 + s / 2, d: s };                      // (menus only: stands in for Esc; never mirrored)
       const stick = { x: rg.x0 + pad + Rs, y: portrait ? rg.y0 + rh * 0.55 : rg.y1 - pad - Rs, r: Rs };
       const zone = portrait ? { x: rg.x0, y: rg.y0, w: (rg.x1 - rg.x0) * 0.5, h: rh } : { x: rg.x0, y: rg.y0 + rh * 0.14, w: (rg.x1 - rg.x0) * 0.44, h: rh * 0.86 };
       if (o.hand === 'left') {
-        for (const id in btn) if (id !== 'back') btn[id].x = vw - btn[id].x;
+        for (const id in btn) if (id !== 'back' && !(zb && ROW.indexOf(id) >= 0)) btn[id].x = vw - btn[id].x;
         stick.x = vw - stick.x; zone.x = vw - zone.x - zone.w;
       }
       for (const id in btn) { btn[id].x = Math.round(btn[id].x); btn[id].y = Math.round(btn[id].y); }
@@ -177,6 +211,7 @@
     if (ui || typeof document === 'undefined' || !canvas || !canvas.parentNode || !document.head || !document.head.appendChild || !root.addEventListener) return;
     try { const q = /[?&]touch=([01])/.exec(root.location ? root.location.search : ''); if (q) T.forced = q[1] === '1' ? 1 : -1; } catch (e) { /* no location */ }
     coarse = !!(root.matchMedia && root.matchMedia('(pointer: coarse)').matches);
+    T.res0 = Math.min(2, root.devicePixelRatio || 1); T.level = Math.max(0, SCALES.findIndex(v => v <= T.res0));
     const style = el('style'); style.textContent = CSS; document.head.appendChild(style);
     const host = el('div'); host.id = 'tc'; document.body.appendChild(host);
     ui = { canvas, game, host, wrap: canvas.parentNode, zone: el('div', 'tc-zone', host), stick: null, knob: null, btn: {}, probe: null };
@@ -287,22 +322,50 @@
     const cs = root.getComputedStyle ? root.getComputedStyle(ui.probe) : null; const n = (k) => (cs && parseFloat(cs[k])) || 0;
     return { t: n('paddingTop'), r: n('paddingRight'), b: n('paddingBottom'), l: n('paddingLeft') };
   }
-  /** (re)place the canvas and every control for the current window */
+  /** (re)compute where everything goes for the current window (the whole-picture layout and, if it applies, the zoomed one) */
   function relayout() {
     const c = cfg(), vw = root.innerWidth, vh = root.innerHeight, S = T.state;
     const vis = T.visible(T.forced === 1 ? 'on' : T.forced === -1 ? 'off' : c.mode, coarse, touchSeen);
     S.visible = vis; const html = document.documentElement; html.classList.toggle('tc-on', vis);
-    T.dirty = false; lastW = vw; lastH = vh;
-    const w = ui.wrap.style;
-    if (!vis) { w.left = w.top = w.width = w.height = ''; ui.layout = null; if (T.stickId !== null || Object.keys(T.down).length) T.clear(); S.on = false; return; }
-    const L = ui.layout = T.layout(vw, vh, insets(), { size: c.size, hand: c.hand });
-    w.left = L.cv.x + 'px'; w.top = L.cv.y + 'px'; w.width = L.cv.w + 'px'; w.height = L.cv.h + 'px';
+    T.dirty = false; T.applied = null; lastW = vw; lastH = vh;
+    if (!vis) { ui.fitL = ui.zoomL = ui.layout = null; if (T.stickId !== null || Object.keys(T.down).length) T.clear(); S.on = false; return; }
+    const ins = insets(), o = { size: c.size, hand: c.hand };
+    ui.fitL = T.layout(vw, vh, ins, o); ui.zoomL = c.fit === 'fill' ? T.layout(vw, vh, ins, Object.assign({ zoom: true }, o)) : null;
     ui.host.style.setProperty('--op', String(c.opacity));
+    place(layoutFor(T.mode));
+    grabWake();
+  }
+  /** the controls follow the picture that is on screen: the zoomed one while the camera is on (or in the options preview), else the whole one */
+  const layoutFor = (mode) => (mode === 'pv' || (mode === 'play' && ED.cam.on)) && ui.zoomL ? ui.zoomL : ui.fitL;
+  function place(L) {
+    ui.layout = L;
     for (const b of BUTTONS) { const p = L.btn[b.id], e = ui.btn[b.id].style; e.width = e.height = p.d + 'px'; e.left = (p.x - p.d / 2) + 'px'; e.top = (p.y - p.d / 2) + 'px'; if (b.text) e.fontSize = Math.round(p.d * (b.small ? 0.38 : 0.3)) + 'px'; }
     const z = ui.zone.style; z.left = L.zone.x + 'px'; z.top = L.zone.y + 'px'; z.width = L.zone.w + 'px'; z.height = L.zone.h + 'px';
     const sz = ui.stick.style; sz.width = sz.height = (L.stick.r * 2) + 'px'; if (T.stickId === null) placeStick();
-    grabWake();
   }
+
+  /** called at the start of every render (main.js): which picture is on screen - the whole one or the zoomed one - sets the canvas size and the camera, so a frame is never drawn into the wrong shape */
+  T.view = function (g) {
+    const S = T.state, cam = ED.cam;
+    const rid = g.room ? g.room.id : null;
+    if (cam.pickRoom !== rid) { cam.pickRoom = rid; cam.whole = false; }                              // (once a room needs the whole picture it keeps it until you leave)
+    if (!cam.whole && !T.zoomRoom(g.room, g.enemies)) cam.whole = true;
+    const want = !!(S.visible && ui.zoomL && g.scene === 'play' && !g.modal && g.floor && g.player && cfg().fit === 'fill' && !cam.whole);
+    const res = S.visible ? SCALES[T.level] : T.res0, box = !S.visible ? null : want ? ui.zoomL.cv : ui.fitL && ui.fitL.cv, H = want ? ui.zoomL.cv.H : C.H;
+    const key = (S.visible ? (want ? 'z' : 'f') : 'off') + '|' + res + '|' + (box ? [box.x, box.y, box.w, box.h].join(',') : '') + '|' + (want ? ui.zoomL.cv.H : '');
+    if (key !== T.applied) {
+      T.applied = key;
+      const cv = ui.canvas, w = Math.round(C.W * res), h = Math.round(H * res);
+      if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+      const st = ui.wrap.style; if (box) { st.left = box.x + 'px'; st.top = box.y + 'px'; st.width = box.w + 'px'; st.height = box.h + 'px'; } else st.left = st.top = st.width = st.height = '';
+      cam.fresh = true;
+    }
+    cam.on = want; cam.h = H;
+    if (!want) return;
+    const p = g.player, vis = H - C.HUD;
+    if (cam.fresh || cam.room !== rid) { cam.y = T.camFollow(cam.y, p.y, vis, C.ROOM_H, true); cam.room = rid; cam.last = g.frameAll; cam.fresh = false; }
+    else { let n = U.clamp(g.frameAll - cam.last, 0, 6); cam.last = g.frameAll; while (n-- > 0) cam.y = T.camFollow(cam.y, p.y, vis, C.ROOM_H); }
+  };
 
   /** once per displayed frame (main.js): decide what is showing and keep the little indicators honest */
   T.frame = function (g, dt) {
@@ -312,6 +375,7 @@
     if (!S.visible) { S.on = false; return; }
     const sm = T.sceneMode(g), preview = g.scene === 'touchopts', mode = preview ? 'pv' : sm;
     if (mode !== T.mode) { if (mode !== 'play') T.clear(); T.mode = mode; ui.host.className = mode === 'pv' ? 'pv play' : mode; }
+    { const L = layoutFor(mode); if (L && L !== ui.layout) place(L); }
     S.on = true;
     const p = g.player, vis = (id, on) => { const d = on ? '' : 'none'; if (ui.btn[id].style.display !== d) ui.btn[id].style.display = d; };
     if (mode === 'menu') { vis('back', g.scene !== 'title' && g.scene !== 'intro'); return; }
@@ -332,7 +396,7 @@
     // a phone that cannot keep up gets a smaller canvas (never bigger again within a visit)
     if (g.scene === 'play' && g.fps && g.fps < 38) slowT += dt; else slowT = Math.max(0, slowT - dt * 0.5);
     const nl = T.nextLevel(T.level, slowT);
-    if (nl !== T.level) { T.level = nl; slowT = 0; const s = SCALES[nl]; ui.canvas.width = Math.round(C.W * s); ui.canvas.height = Math.round(C.H * s); }
+    if (nl !== T.level) { T.level = nl; slowT = 0; }                                      // (view() resizes the canvas at the next render)
   };
 
   T.fullscreen = function () {
@@ -362,6 +426,7 @@
       else if (a === 'hand') T.set('hand', c.hand === 'left' ? 'right' : 'left');
       else if (a === 'opacity') T.set('opacity', OPACS[(OPACS.indexOf(c.opacity) + 1) % OPACS.length]);
       else if (a === 'vib') { T.set('vib', c.vib ? 0 : 1); if (!c.vib) vib(30); }
+      else if (a === 'fit') T.set('fit', c.fit === 'fill' ? 'fit' : 'fill');
       else if (a === 'auto') T.set('auto', c.auto ? 0 : 1);
       else if (a === 'full') T.fullscreen();
       else if (a === 'install') T.install();
@@ -369,20 +434,21 @@
     },
     draw(g, c) {
       const UI = ED.ui, s = cfg(), x = 230, w = 500;
-      UI.shadow(c, 'TOUCH CONTROLS', C.W / 2, 70, 32, '#7fd8ff', 'center');
-      UI.text(c, 'Drag the left side to move. Hold ATTACK to shoot (drag it to aim, or let it pick the nearest foe).', C.W / 2, 96, 12, '#a8a8c8', 'center', false);
+      UI.shadow(c, 'TOUCH CONTROLS', C.W / 2, 62, 32, '#7fd8ff', 'center');
+      UI.text(c, 'Drag the left side to move. Hold ATTACK to shoot (drag it to aim, or let it pick the nearest foe).', C.W / 2, 86, 12, '#a8a8c8', 'center', false);
       const mode = s.mode === 'auto' ? 'AUTO (on phones and tablets)' : s.mode === 'on' ? 'ALWAYS ON' : 'OFF';
-      UI.button(c, 'mode', 'Touch controls: ' + mode, x, 120, w, 40, { size: 15 });
-      UI.button(c, 'size', 'Button size: ' + SIZE_NAMES[SIZES.indexOf(s.size)], x, 166, 246, 38, { size: 14 });
-      UI.button(c, 'opacity', 'Look: ' + OPAC_NAMES[OPACS.indexOf(s.opacity)], x + 254, 166, 246, 38, { size: 14 });
-      UI.button(c, 'hand', 'Layout: ' + (s.hand === 'left' ? 'LEFT-HANDED' : 'RIGHT-HANDED'), x, 210, w, 38, { size: 14 });
-      UI.button(c, 'auto', 'Auto-aim at the nearest foe: ' + (s.auto ? 'ON' : 'OFF'), x, 254, w, 38, { size: 14 });
-      UI.button(c, 'vib', 'Vibration: ' + (s.vib ? 'ON' : 'OFF'), x, 298, w, 38, { size: 14 });
-      UI.button(c, 'full', T.standalone() ? 'Full screen (installed)' : 'Full screen / landscape', x, 342, w, 38, { size: 14, disabled: !T.canFullscreen() });
-      UI.button(c, 'install', T.canInstall() ? 'Install EMBERDEEP on this device' : 'Install on this device', x, 386, w, 38, { size: 14, color: '#6ee07a', disabled: !T.canInstall() });
-      UI.wrap(c, T.platformTip(), x + 4, 444, w - 8, 15, 12, '#a8a8c8');
-      UI.text(c, 'The controls are previewed here, so you can see what each change does.', C.W / 2, 520, 11, '#7a7a98', 'center', false);
-      UI.button(c, 'back', 'Back', x, 560, w, 40, { size: 16 });
+      UI.button(c, 'mode', 'Touch controls: ' + mode, x, 104, w, 38, { size: 15 });
+      UI.button(c, 'size', 'Button size: ' + SIZE_NAMES[SIZES.indexOf(s.size)], x, 148, 246, 38, { size: 14 });
+      UI.button(c, 'opacity', 'Look: ' + OPAC_NAMES[OPACS.indexOf(s.opacity)], x + 254, 148, 246, 38, { size: 14 });
+      UI.button(c, 'hand', 'Layout: ' + (s.hand === 'left' ? 'LEFT-HANDED' : 'RIGHT-HANDED'), x, 192, w, 38, { size: 14 });
+      UI.button(c, 'fit', 'Screen: ' + (s.fit === 'fill' ? 'FILL (zoomed, follows you)' : 'FIT (whole room)'), x, 236, w, 38, { size: 14 });
+      UI.button(c, 'auto', 'Auto-aim at the nearest foe: ' + (s.auto ? 'ON' : 'OFF'), x, 280, w, 38, { size: 14 });
+      UI.button(c, 'vib', 'Vibration: ' + (s.vib ? 'ON' : 'OFF'), x, 324, w, 38, { size: 14 });
+      UI.button(c, 'full', T.standalone() ? 'Full screen (installed)' : 'Full screen / landscape', x, 368, w, 38, { size: 14, disabled: !T.canFullscreen() });
+      UI.button(c, 'install', T.canInstall() ? 'Install EMBERDEEP on this device' : 'Install on this device', x, 412, w, 38, { size: 14, color: '#6ee07a', disabled: !T.canInstall() });
+      UI.wrap(c, T.platformTip(), x + 4, 468, w - 8, 15, 12, '#a8a8c8');
+      UI.text(c, 'The controls are previewed here, so you can see what each change does.', C.W / 2, 538, 11, '#7a7a98', 'center', false);
+      UI.button(c, 'back', 'Back', x, 566, w, 40, { size: 16 });
     },
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
