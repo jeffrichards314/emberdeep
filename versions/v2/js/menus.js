@@ -1,0 +1,369 @@
+/* EMBERDEEP — menus.js : title, class + seed select, collection, controls, options, pause, end screens */
+(function (root) {
+  'use strict';
+  const ED = root.ED, U = ED.U, D = ED.D, C = ED.C;
+  const UI = ED.ui, TAU = U.TAU;
+  const TABS = ['Classes', 'Relics', 'Actives', 'Bestiary', 'Bosses'];
+  let embers = null;
+
+  const M = ED.menus = {
+    score(g) {
+      const r = g.run; return Math.round(r.floorNum * 1000 + r.kills * 8 + r.goldEarned + ED.items.relicCount(g.player) * 50 + (r.victory || r.cashedOut ? 2500 : 0));
+    },
+    // ============================================================ navigation core
+    navigate(g) {
+      const inp = ED.input, m = inp.mouse, all = UI.prevBtns, btns = all.filter(b => b.nav);
+      if (UI.seedEdit) return;
+      if (btns.length) {
+        let idx = btns.findIndex(b => b.id === UI.navSel);
+        if (m.moved) for (let i = 0; i < btns.length; i++) { const b = btns[i]; if (m.x >= b.x && m.x <= b.x + b.w && m.y >= b.y && m.y <= b.y + b.h) { if (UI.navSel !== b.id) UI.navSel = b.id; idx = i; } }
+        if (idx < 0) { idx = 0; UI.navSel = btns[0].id; }
+        const vert = UI.navMode === 'vert';
+        let d = 0;
+        if (inp.consume('down')) d = 1; else if (inp.consume('up')) d = -1;
+        else if (!vert) { if (inp.consume('right')) d = 1; else if (inp.consume('left')) d = -1; }
+        if (d) { idx = (idx + d + btns.length) % btns.length; UI.navSel = btns[idx].id; g.sfx('ui'); }
+        if (m.clicked) { for (const b of all) if (!b.disabled && m.x >= b.x && m.x <= b.x + b.w && m.y >= b.y && m.y <= b.y + b.h) { UI.action = b.id; g.sfx('uiok'); inp.mouse.clicked = false; break; } }
+        if (inp.consume('confirm')) { const b = btns[idx]; if (b) { UI.action = b.id; g.sfx('uiok'); } }
+      }
+    },
+    pollAction(g) { const a = UI.action; UI.action = null; return a; },
+    go(g, scene) { if (scene === 'title' || scene === 'select' || scene === 'collection') g.toasts.length = 0; g.scene = scene; UI.navSel = null; UI.action = null; UI.navMode = 'all'; UI.prevBtns = []; UI.btns = []; g.sfx('ui'); },
+
+    // ============================================================ update dispatcher
+    updateMenu(g) {
+      UI.t++;
+      for (const t of g.toasts) t.t++; U.compact(g.toasts, t => t.t < t.dur);
+      const inp = ED.input;
+      const sc = g.scene;
+      if (sc === 'title') {
+        M.navigate(g); const a = M.pollAction(g);
+        if (a === 'start' || a === 'daily') ED.save.syncClasses();
+        if (a === 'start') { UI.seedText = UI.seedText || ED.save.meta.lastSeed || ED.randomSeed(); UI.selClass = ED.save.isClassUnlocked(ED.save.meta.lastClass) ? ED.save.meta.lastClass : 'knight'; M.go(g, 'select'); }
+        else if (a === 'daily') { UI.seedText = ED.dailySeed(); UI.selClass = 'knight'; M.go(g, 'select'); }
+        else if (a === 'collection') { UI.tab = 0; M.go(g, 'collection'); }
+        else if (a === 'help') M.go(g, 'help');
+        else if (a === 'versions') { UI.navMode = 'vert'; M.go(g, 'versions'); UI.navMode = 'vert'; }
+        else if (a === 'options') { UI.back = 'title'; UI.navMode = 'vert'; M.go(g, 'settings'); UI.navMode = 'vert'; }
+      } else if (sc === 'versions') {
+        UI.navMode = 'vert'; M.navigate(g); const a = M.pollAction(g);
+        if (a === 'back' || inp.consume('back')) { M.go(g, 'title'); return; }
+        if (a && a.indexOf('pack:') === 0) { const id = a.slice(5); if (ED.packs.BY_ID[id] && !ED.packs.BY_ID[id].base) { ED.packs.toggle(id); g.sfx(ED.packs.on(id) ? 'unlock' : 'uiback'); } else g.sfx('deny'); }
+        else if (a && a.indexOf('upto:') === 0) { ED.packs.upTo(a.slice(5)); g.sfx('unlock'); }
+        else if (a === 'allpacks') { ED.packs.use('all'); g.sfx('unlock'); }
+        UI.navMode = 'vert';
+      } else if (sc === 'select') {
+        if (UI.seedEdit) return;
+        M.navigate(g); const a = M.pollAction(g);
+        if (inp.consume('back')) { M.go(g, 'title'); return; }
+        if (a && a.indexOf('cls:') === 0) { const id = a.slice(4); if (ED.save.isClassUnlocked(id)) UI.selClass = id; else g.sfx('deny'); }
+        else if (a === 'seed') M.editSeed(g);
+        else if (a === 'rand') UI.seedText = ED.randomSeed();
+        else if (a === 'daily') UI.seedText = ED.dailySeed();
+        else if (a === 'go') { const seed = ED.normalizeSeed(UI.seedText); UI.seedText = seed; g.startRun(seed, UI.selClass); }
+        else if (a === 'back') M.go(g, 'title');
+      } else if (sc === 'collection') {
+        M.navigate(g); const a = M.pollAction(g);
+        if (inp.consume('back')) { M.go(g, 'title'); return; }
+        if (a && a.indexOf('tab:') === 0) UI.tab = +a.slice(4);
+        else if (a === 'back') M.go(g, 'title');
+        if (inp.consume('tab')) UI.tab = (UI.tab + 1) % TABS.length;
+      } else if (sc === 'help') {
+        M.navigate(g); const a = M.pollAction(g);
+        if (a === 'back' || inp.consume('back')) M.go(g, 'title');
+      } else if (sc === 'settings') {
+        UI.navMode = 'vert'; M.navigate(g); const a = M.pollAction(g);
+        const s = ED.save.meta.settings, sel = UI.navSel;
+        const adj = (k, step, lo, hi) => { let d = 0; if (inp.consume('left')) d = -step; else if (inp.consume('right')) d = step; if (a === 'opt:' + k) d = step; if (d) { s[k] = U.clamp(Math.round((s[k] + d) * 100) / 100, lo, hi); ED.save.save(); ED.audio.applyVolume(); g.sfx('ui'); } };
+        if (sel === 'opt:volume') adj('volume', 0.1, 0, 1); else if (sel === 'opt:music') adj('music', 0.1, 0, 1); else if (sel === 'opt:shake') adj('shake', 0.25, 0, 1.5); else if (sel === 'opt:flash') adj('flash', 0.25, 0, 1);
+        else if (sel === 'opt:dmg') { if (a === 'opt:dmg' || inp.consume('left') || inp.consume('right')) { s.damageNumbers = s.damageNumbers ? 0 : 1; ED.save.save(); } }
+        if (a === 'reset') { if (UI.confirm === 'reset') { ED.save.reset(); UI.confirm = null; g.toast && g.toast('Save data erased', '#ff6a6a'); } else UI.confirm = 'reset'; }
+        if (a === 'back' || inp.consume('back')) { const to = UI.back || 'title'; UI.confirm = null; if (to === 'paused') { g.scene = 'paused'; UI.navSel = null; } else M.go(g, to); }
+      } else if (sc === 'paused') {
+        UI.navMode = 'vert'; M.navigate(g); const a = M.pollAction(g);
+        if (inp.consume('pause') || inp.consume('back') || a === 'resume') { g.scene = 'play'; UI.navSel = null; g.sfx('uiback'); return; }
+        if (a === 'options') { UI.back = 'paused'; g.scene = 'settings'; UI.navSel = null; }
+        else if (a === 'abandon') { if (UI.confirm === 'abandon') { UI.confirm = null; g.finishRun(false); } else UI.confirm = 'abandon'; }
+        else if (a === 'title') { UI.confirm = null; M.go(g, 'title'); g.scene = 'title'; }
+        UI.navMode = 'all';
+      } else if (sc === 'dead' || sc === 'victory') {
+        g.deadT++;
+        UI.navMode = 'vert'; M.navigate(g); const a = M.pollAction(g);
+        if (g.deadT < 25) return;
+        if (a === 'retry') { g.startRun(g.run.seed, g.run.classId); }
+        else if (a === 'new') { UI.seedText = ED.randomSeed(); UI.selClass = ED.save.isClassUnlocked(g.run.classId) ? g.run.classId : 'knight'; M.go(g, 'select'); }
+        else if (a === 'title') M.go(g, 'title');
+        else if (a === 'copy') M.copySummary(g);
+        UI.navMode = 'all';
+      }
+      if (g.scene === 'settings' && g.run && UI.back === 'paused') { /* keep world frozen */ }
+    },
+    editSeed(g) {
+      UI.seedEdit = true;
+      ED.input.textCapture = (key, code, ev) => {
+        if (code === 'Enter' || code === 'Escape' || code === 'Tab') { UI.seedEdit = false; ED.input.textCapture = null; UI.seedText = ED.normalizeSeed(UI.seedText); return true; }
+        if (code === 'Backspace') { UI.seedText = UI.seedText.slice(0, -1); return true; }
+        if (key && key.length === 1 && /[a-zA-Z0-9]/.test(key) && UI.seedText.length < 12) { UI.seedText += key.toUpperCase(); return true; }
+        return true;
+      };
+      UI.seedText = '';
+    },
+    copySummary(g) {
+      const r = g.run, p = g.player;
+      const txt = 'EMBERDEEP — ' + (r.victory ? 'VICTORY' : 'died') + ' on floor ' + r.floorNum + ' | ' + ED.items.CLASSES[r.classId].name + ' | ' + r.kills + ' kills | seed ' + r.seed + ' | ' + ED.items.relicCount(p) + ' relics | score ' + M.score(g);
+      try { if (root.navigator && root.navigator.clipboard) root.navigator.clipboard.writeText(txt); } catch (e) { /* ignore */ }
+      g.toast('Run summary copied!', '#6ee07a'); g.sfx('uiok');
+    },
+
+    // ============================================================ drawing
+    drawMenu(g, c) {
+      UI.beginFrame();
+      M.drawBackdrop(g, c);
+      switch (g.scene) {
+        case 'title': M.drawTitle(g, c); break;
+        case 'select': M.drawSelect(g, c); break;
+        case 'collection': M.drawCollection(g, c); break;
+        case 'help': M.drawHelp(g, c); break;
+        case 'settings': M.drawSettings(g, c); break;
+        case 'versions': M.drawVersions(g, c); break;
+      }
+      UI.drawToasts(g, c);
+    },
+    drawBackdrop(g, c) {
+      const t = UI.t;
+      const gr = c.createLinearGradient(0, 0, 0, C.H); gr.addColorStop(0, '#0a0814'); gr.addColorStop(1, '#1a0f1c'); c.fillStyle = gr; c.fillRect(0, 0, C.W, C.H);
+      if (!embers) { embers = []; for (let i = 0; i < 70; i++) embers.push({ x: Math.random() * C.W, y: Math.random() * C.H, s: 0.3 + Math.random() * 1.2, r: 1 + Math.random() * 2.2, p: Math.random() * 6 }); }
+      // distant dungeon silhouettes
+      c.fillStyle = '#120c1a'; for (let i = 0; i < 9; i++) { const w = 90 + (i * 37) % 60, h = 120 + (i * 53) % 150; c.fillRect(i * 118 - 20, C.H - h, w, h); c.fillRect(i * 118 - 20 + w / 2 - 6, C.H - h - 18, 12, 18); }
+      for (const e of embers) { e.y -= e.s; e.x += Math.sin(t * 0.02 + e.p) * 0.3; if (e.y < -5) { e.y = C.H + 5; e.x = Math.random() * C.W; } c.fillStyle = 'rgba(255,' + (120 + Math.floor(e.s * 60)) + ',60,' + (0.25 + 0.4 * Math.sin(t * 0.05 + e.p) * Math.sin(t * 0.05 + e.p)) + ')'; c.fillRect(e.x, e.y, e.r, e.r); }
+    },
+    drawTitle(g, c) {
+      const t = UI.t, meta = ED.save.meta;
+      // logo
+      c.save(); c.translate(C.W / 2, 128);
+      for (let i = 0; i < 3; i++) { c.fillStyle = 'rgba(255,' + (90 + i * 40) + ',40,' + (0.12 - i * 0.03) + ')'; c.beginPath(); c.arc(0, 8, 150 + i * 30 + Math.sin(t * 0.04) * 6, 0, TAU); c.fill(); }
+      UI.text(c, 'EMBERDEEP', 4, 6, 76, '#3a0f08', 'center'); UI.text(c, 'EMBERDEEP', 0, 0, 76, '#ffb04a', 'center'); UI.text(c, 'EMBERDEEP', -1, -2, 76, '#ffe0a0', 'center');
+      c.restore();
+      UI.text(c, 'an endless descent', C.W / 2, 172, 18, '#c8a090', 'center', false);
+      UI.text(c, ED.packs.stamp() === 'v1' ? 'v1 · original edition' : 'edition ' + ED.packs.stamp(), C.W / 2, 192, 11, '#8a7a98', 'center', false);
+      const bx = C.W / 2 - 150; let y = 215;
+      UI.button(c, 'start', 'START RUN', bx, y, 300, 44, { size: 20, color: '#ffb04a' }); y += 54;
+      UI.button(c, 'daily', 'Daily Descent  (' + ED.dailySeed() + ')', bx, y, 300, 36, { size: 14 }); y += 44;
+      UI.button(c, 'collection', 'Collection & Unlocks', bx, y, 300, 36, { size: 14 }); y += 44;
+      UI.button(c, 'help', 'Controls', bx, y, 300, 36, { size: 14 }); y += 44;
+      UI.button(c, 'options', 'Options', bx, y, 300, 36, { size: 14 }); y += 52;
+      // stats
+      const unl = Object.keys(meta.unlocked.items).length + Object.keys(meta.unlocked.classes).length - 1;
+      UI.panel(c, C.W / 2 - 240, y, 480, 78, '#4a4a68', 0.6);
+      const bf = (meta.bestByPacks && meta.bestByPacks[ED.packs.key()]) || 0;
+      UI.text(c, 'DEEPEST FLOOR  ' + meta.bestFloor + (ED.packs.stamp() !== 'v1' || bf !== meta.bestFloor ? '   (' + ED.packs.stamp() + ': ' + bf + ')' : ''), C.W / 2, y + 26, 18, meta.bestFloor ? '#ffd24a' : '#8a8aa8', 'center');
+      UI.text(c, 'Runs ' + meta.totalRuns + '   ·   Kills ' + meta.totalKills + '   ·   Victories ' + meta.victories + '   ·   Unlocks ' + unl, C.W / 2, y + 48, 12, '#a8a8c8', 'center', false);
+      if (meta.bestRun) UI.text(c, 'Best run: floor ' + meta.bestRun.floor + ' as ' + (ED.items.CLASSES[meta.bestRun.cls] || { name: '?' }).name + ' (seed ' + meta.bestRun.seed + ')', C.W / 2, y + 66, 11, '#8a8aa8', 'center', false);
+      UI.text(c, 'M mute · F fullscreen · ` debug', C.W / 2, C.H - 12, 11, '#5a5a78', 'center', false);
+      UI.button(c, 'versions', 'VERSIONS  ▸  ' + ED.packs.stamp(), C.W - 262, 16, 246, 36, { size: 13, color: '#7fd8ff' });
+    },
+    drawSelect(g, c) {
+      const meta = ED.save.meta;
+      UI.shadow(c, 'CHOOSE YOUR HERO', C.W / 2, 56, 32, '#ffd24a', 'center');
+      const ids = ED.items.classList().map(c => c.id), compact = ids.length > 7;
+      const perRow = compact ? Math.ceil(ids.length / 2) : ids.length, cw = compact ? 118 : 108, gap = 10, ch = compact ? 104 : 214;
+      ids.forEach((id, i) => {
+        const cls = ED.items.CLASSES[id], row = compact ? Math.floor(i / perRow) : 0, col = compact ? i % perRow : i;
+        const inRow = compact ? (row === 0 ? perRow : ids.length - perRow) : ids.length, x0 = (C.W - (inRow * cw + (inRow - 1) * gap)) / 2;
+        const x = x0 + col * (cw + gap), y = compact ? 70 + row * (ch + 8) : 82, unlocked = ED.save.isClassUnlocked(id), sel = UI.selClass === id;
+        UI.button(c, 'cls:' + id, '', x, y, cw, ch, { selected: sel, color: cls.color, disabled: false });
+        c.save();
+        if (!unlocked) c.globalAlpha = 0.45;
+        const cy = compact ? y + 26 : y + 44, wr = compact ? 15 : 22;
+        c.fillStyle = unlocked ? cls.color : '#555'; c.beginPath(); c.arc(x + cw / 2, cy, wr, 0, TAU); c.fill(); c.strokeStyle = '#10101c'; c.lineWidth = 3; c.stroke();
+        ED.render.itemGlyph(c, { cat: 'weapon', type: cls.weapon, rarity: 'common' }, x + cw / 2 + (compact ? 18 : 24), cy + (compact ? 14 : 26), compact ? 9 : 12, UI.t);
+        UI.text(c, cls.name, x + cw / 2, compact ? y + 58 : y + 100, compact ? 13 : 15, unlocked ? '#fff' : '#888', 'center');
+        UI.text(c, ED.items.WEAPONS[cls.weapon].name, x + cw / 2, compact ? y + 71 : y + 116, compact ? 10 : 11, unlocked ? '#c8c8e0' : '#777', 'center', false);
+        if (compact) {
+          UI.text(c, '♥ ' + cls.hearts, x + cw / 2 - 28, y + 86, 11, unlocked ? '#ff6a8a' : '#666', 'center');
+          UI.text(c, ED.items.ACTIVES[cls.active].name, x + cw / 2 + 14, y + 86, 9, unlocked ? ED.items.ACTIVES[cls.active].color : '#777', 'center', false);
+        } else {
+          for (let k = 0; k < cls.hearts; k++) { ED.render.heart(c, x + 10 + (k % 5) * 18 + 6, y + 134 + Math.floor(k / 5) * 14, 4.5); c.fillStyle = unlocked ? '#ff3a5a' : '#555'; c.fill(); }
+          UI.text(c, ED.items.ACTIVES[cls.active].name, x + cw / 2, y + 172, 10, unlocked ? ED.items.ACTIVES[cls.active].color : '#777', 'center', false);
+        }
+        c.restore();
+        if (!unlocked) {
+          ED.icons.draw(c, 'lock', x + cw / 2, cy, compact ? 9 : 12, '#ddd'); const what = M.unlockText(cls.unlock);
+          if (compact) UI.text(c, what.slice(0, 20), x + cw / 2, y + 98, 8, '#ff9a6a', 'center', false);
+          else { UI.text(c, what.slice(0, 16), x + cw / 2, y + 196, 9, '#ff9a6a', 'center', false); UI.text(c, what.slice(16, 32), x + cw / 2, y + 207, 9, '#ff9a6a', 'center', false); }
+        }
+      });
+      const sc = ED.items.CLASSES[UI.selClass];
+      UI.panel(c, 70, compact ? 300 : 306, 820, 62, '#4a4a68', 0.7);
+      UI.wrap(c, sc.desc + '  ' + (ED.items.WEAPONS[sc.weapon].desc) + (sc.passive ? '  PASSIVE — ' + ED.items.relic(sc.passive).name + ': ' + ED.items.relic(sc.passive).desc : ''), 86, 326, 790, 14, 12, '#d8d8ee');
+      // seed
+      const best = meta.bestBySeed[ED.normalizeSeed(UI.seedText || 'x')];
+      UI.text(c, 'SEED', 90, 402, 14, '#9a9ab8');
+      UI.button(c, 'seed', UI.seedEdit ? UI.seedText + (Math.floor(UI.t / 20) % 2 ? '_' : ' ') : (UI.seedText || '(random)'), 150, 380, 280, 36, { size: 18, color: '#7fd8ff', selected: UI.seedEdit });
+      UI.button(c, 'rand', 'Random', 440, 380, 110, 36, { size: 14 });
+      UI.button(c, 'daily', 'Daily', 560, 380, 90, 36, { size: 14 });
+      UI.text(c, UI.seedEdit ? 'Type letters/numbers, Enter to confirm' : 'Click the seed (or press Enter on it) to type your own. Same seed = same dungeon.', 90, 440, 12, '#8a8aa8', 'left', false);
+      if (best) UI.text(c, 'Best on this seed: floor ' + best, 690, 404, 14, '#ffd24a', 'left');
+      UI.button(c, 'go', 'BEGIN DESCENT', C.W / 2 - 160, 480, 320, 54, { size: 22, color: '#ffb04a' });
+      UI.button(c, 'back', 'Back', C.W / 2 - 160, 546, 320, 34, { size: 14 });
+      UI.text(c, ED.save.meta.bestFloor ? 'Deepest floor: ' + meta.bestFloor : '', C.W / 2, 610, 13, '#8a8aa8', 'center', false);
+    },
+    unlockText(u) {
+      if (!u) return '';
+      const [k, id] = u.split(':');
+      if (k === 'boss') { const d = ED.bosses.def(id); return 'Defeat ' + (d ? d.name : id); }
+      if (k === 'mega') { const id2 = ED.bosses.MEGA_ORDER[+id]; const d = ED.bosses.def(id2); return 'Defeat ' + (d ? d.name : 'a MEGA boss'); }
+      if (k === 'mini') { const d = ED.minibosses.def(id); return 'Defeat ' + (d ? d.name : id); }
+      if (k === 'floor') return 'Reach floor ' + id;
+      if (k === 'kills') return 'Slay ' + id + ' foes (all runs)';
+      if (k === 'victory') return 'Win a run (cash out)';
+      return u;
+    },
+    drawHelp(g, c) {
+      UI.shadow(c, 'CONTROLS', C.W / 2, 70, 34, '#ffd24a', 'center');
+      const rows = [['Move', 'WASD / Arrow keys'], ['Attack', 'Space / J / Left click (mouse aims)'], ['Dash (i-frames)', 'K / Shift'], ['Interact / Buy / Take', 'E'], ['Active ability', 'Q'], ['Place bomb', 'B'], ['Pause', 'Esc / P'], ['Mute / Fullscreen', 'M / F'], ['Debug mode', '` (backtick)']];
+      rows.forEach((r, i) => { UI.text(c, r[0], 230, 130 + i * 30, 17, '#cfd0ee'); UI.text(c, r[1], 520, 130 + i * 30, 17, '#ffd24a'); });
+      const tips = ['Doors lock while enemies live. Telegraphed attacks glow red: dash THROUGH them or away.', 'The Boss Key is carried by a mini boss. Find the right key for each locked door (colored by type).', 'Bomb cracked walls (B). Cursed, devil and shrine rooms show costs up front — mystery chests do not.', 'Every 5th floor is a MEGA BOSS. A rest room appears before it.'];
+      tips.forEach((t2, i) => UI.text(c, '• ' + t2, 70, 428 + i * 24, 13, '#a8a8c8', 'left', false));
+      UI.button(c, 'back', 'Back', C.W / 2 - 100, 560, 200, 40, {});
+    },
+    drawSettings(g, c) {
+      const s = ED.save.meta.settings;
+      UI.shadow(c, 'OPTIONS', C.W / 2, 90, 34, '#ffd24a', 'center');
+      const bar = (id, label, v, max, y) => {
+        UI.button(c, 'opt:' + id, label, 230, y, 500, 44, { size: 16 });
+        c.fillStyle = '#1a1a2a'; c.fillRect(530, y + 14, 180, 16); c.fillStyle = '#ffb04a'; c.fillRect(530, y + 14, 180 * v / max, 16);
+        UI.text(c, Math.round(v * 100) + '%', 700, y + 28, 12, '#fff', 'right');
+      };
+      bar('volume', '', s.volume, 1, 130); UI.text(c, 'Master volume', 250, 158, 16, '#cfd0ee');
+      bar('music', '', s.music, 1, 184); UI.text(c, 'Music', 250, 212, 16, '#cfd0ee');
+      bar('shake', '', s.shake, 1.5, 238); UI.text(c, 'Screen shake', 250, 266, 16, '#cfd0ee');
+      bar('flash', '', s.flash, 1, 292); UI.text(c, 'Screen flashes (accessibility)', 250, 320, 16, '#cfd0ee');
+      UI.button(c, 'opt:dmg', 'Damage numbers: ' + (s.damageNumbers ? 'ON' : 'OFF'), 230, 346, 500, 44, { size: 16 });
+      UI.button(c, 'reset', UI.confirm === 'reset' ? 'Really erase ALL save data? (click again)' : 'Reset save data', 230, 410, 500, 40, { size: 14, color: '#ff6a6a' });
+      UI.button(c, 'back', 'Back', 230, 470, 500, 44, { size: 16 });
+      UI.text(c, 'Use ←/→ to change values', C.W / 2, 545, 12, '#8a8aa8', 'center', false);
+    },
+
+    // ============================================================ versions (the update toggles)
+    drawVersions(g, c) {
+      const L = ED.packs.LIST;
+      UI.shadow(c, 'VERSIONS', C.W / 2, 48, 32, '#7fd8ff', 'center');
+      UI.text(c, 'Each update is independent: switch any on or off for your NEXT run (v1 alone is the untouched original).', C.W / 2, 70, 12, '#a8a8c8', 'center', false);
+      // cumulative presets
+      const bw = Math.min(118, Math.floor((C.W - 120 - (L.length) * 8) / (L.length + 1)));
+      const bx0 = (C.W - ((L.length + 1) * bw + L.length * 8)) / 2;
+      L.forEach((p, i) => UI.button(c, 'upto:' + p.id, i === 0 ? 'v1 only' : '→ ' + p.id, bx0 + i * (bw + 8), 82, bw, 28, { size: 12, color: p.color }));
+      UI.button(c, 'allpacks', 'EVERYTHING', bx0 + L.length * (bw + 8), 82, bw, 28, { size: 12, color: '#6ee07a' });
+      const rowH = Math.min(84, Math.floor(440 / L.length)), y0 = 122;
+      const NAMES = { classes: 'classes', weapons: 'weapons', actives: 'actives', relics: 'relics', armor: 'armor', affixes: 'affixes', enemies: 'enemies', mods: 'elite mods', minis: 'mini bosses', bosses: 'bosses', megas: 'mega bosses', rooms: 'room types', worlds: 'worlds', events: 'events', familiars: 'familiars', heat: 'heat rules', shrines: 'shrine altars' };
+      L.forEach((p, i) => {
+        const y = y0 + i * rowH, on = ED.packs.on(p.id);
+        UI.button(c, 'pack:' + p.id, '', 60, y, C.W - 120, rowH - 6, { nav: !p.base, color: p.color, selected: false });
+        c.fillStyle = on ? U.rgba(p.color, 0.10) : 'rgba(0,0,0,0.35)'; c.fillRect(64, y + 3, C.W - 128, rowH - 12);
+        // switch
+        c.fillStyle = on ? p.color : '#3a3a4a'; c.fillRect(76, y + 14, 56, 24); c.fillStyle = '#10101c'; c.fillRect(on ? 106 : 80, y + 17, 22, 18);
+        UI.text(c, p.base ? 'BASE' : on ? 'ON' : 'OFF', 104, y + 54, 10, on ? '#fff' : '#7a7a90', 'center');
+        UI.text(c, p.id.toUpperCase() + ' · ' + p.name, 150, y + 24, 17, on ? p.color : '#7a7a90');
+        UI.text(c, p.tag, 150 + 12 + (p.id.length + p.name.length + 3) * 10.2, y + 24, 12, on ? '#c8c8e0' : '#6a6a80', 'left', false);
+        UI.wrap(c, p.blurb, 150, y + 39, 740, 12, 10, on ? '#a8a8c8' : '#60607a');
+        const cnt = ED.packs.content(p.id), parts = [];
+        for (const k in cnt) parts.push('+' + cnt[k] + ' ' + (NAMES[k] || k));
+        if (parts.length) UI.text(c, parts.join('  ·  '), 150, y + rowH - 13, 10, on ? '#ffd24a' : '#6a6a50', 'left', false);
+      });
+      UI.text(c, 'Active edition: ' + ED.packs.stamp() + '   ·   unlocks and best floors are shared; each edition also tracks its own best floor.', C.W / 2, 586, 12, '#9a9ab8', 'center', false);
+      UI.button(c, 'back', 'Back', C.W / 2 - 100, 596, 200, 34, { size: 14 });
+    },
+
+    // ============================================================ collection
+    drawCollection(g, c) {
+      const meta = ED.save.meta, m = ED.input.mouse;
+      UI.shadow(c, 'COLLECTION', C.W / 2, 50, 32, '#ffd24a', 'center');
+      TABS.forEach((t2, i) => UI.button(c, 'tab:' + i, t2, 70 + i * 160, 68, 150, 32, { size: 14, selected: UI.tab === i, color: '#7fd8ff' }));
+      UI.button(c, 'back', 'Back', C.W - 160, 600, 120, 30, { size: 13 });
+      let cells = [];
+      const tab = UI.tab;
+      if (tab === 0) for (const cls of ED.items.classList()) { const un = ED.save.isClassUnlocked(cls.id); cells.push({ name: un ? cls.name : '???', color: un ? cls.color : '#555', unlocked: un, desc: un ? cls.desc : M.unlockText(cls.unlock), draw: (x, y) => { c.fillStyle = un ? cls.color : '#444'; c.beginPath(); c.arc(x, y, 12, 0, TAU); c.fill(); }, sub: un ? ED.items.WEAPONS[cls.weapon].name : 'LOCKED' }); }
+      else if (tab === 1) for (const r of ED.packs.values(ED.items.RELICS).filter(x => !x.hidden)) { const un = ED.items.isUnlocked(r); const seen = !!meta.seen.items[r.id]; cells.push({ name: un ? r.name : '???', color: un ? ED.items.RARITY[r.rarity].color : '#555', unlocked: un, desc: un ? r.desc : 'Locked. ' + M.unlockText(r.unlock), draw: (x, y) => { if (un) ED.render.itemGlyph(c, { cat: 'relic', id: r.id }, x, y, 11, 0); else ED.icons.draw(c, 'lock', x, y, 9, '#777'); }, sub: un ? (seen ? 'found' : 'unfound') : 'LOCKED', rar: r.rarity }); }
+      else if (tab === 2) for (const a of ED.packs.values(ED.items.ACTIVES)) { const un = ED.items.isUnlocked(a); cells.push({ name: un ? a.name : '???', color: un ? a.color : '#555', unlocked: un, desc: un ? a.desc : 'Locked. ' + M.unlockText(a.unlock), draw: (x, y) => { if (un) ED.render.itemGlyph(c, { cat: 'active', id: a.id, rarity: 'common' }, x, y, 11, 0); else ED.icons.draw(c, 'lock', x, y, 9, '#777'); }, sub: un ? 'active' : 'LOCKED' }); }
+      else if (tab === 3) for (const e of Object.values(ED.enemyTypes)) { if (e.id === 'boss') continue; const seen = !!meta.seen.enemies[e.id]; cells.push({ name: seen ? e.name : '???', color: seen ? e.color : '#555', unlocked: seen, desc: seen ? e.desc + '  (appears from floor ' + (D.ENEMY_INTRO[e.id] || '—') + ')' : 'Not yet encountered.', draw: (x, y) => { c.fillStyle = seen ? e.color : '#333'; ED.render.shape(c, e.shape, x, y, 11, 0, 0); c.fill(); }, sub: seen ? 'seen' : '' }); }
+      else {
+        for (const id of ED.minibosses.ids) { const d = ED.minibosses.def(id), un = !!meta.unlocked.minis[id]; cells.push({ name: un ? d.name : '???', color: un ? d.color : '#555', unlocked: un, desc: un ? d.title + ' — mini boss. Unlocked: ' + d.unlockText : 'Defeat it once to unlock: ' + d.unlockText, draw: (x, y) => { ED.icons.draw(c, un ? 'skull' : 'lock', x, y, 10, un ? d.color : '#777'); }, sub: 'mini' }); }
+        for (const id of ED.bosses.allIds()) { const d = ED.bosses.def(id), un = !!meta.unlocked.bosses[id]; cells.push({ name: un ? d.name : '???', color: un ? d.color : '#555', unlocked: un, desc: un ? d.name + ', ' + d.title + (d.mega ? ' (MEGA BOSS). ' : '. ') + d.teaches : (d.mega ? 'MEGA BOSS. ' : 'Boss. ') + 'Defeat it to unlock its rewards.', draw: (x, y) => { ED.icons.draw(c, un ? 'bigskull' : 'lock', x, y, 11, un ? d.color : '#777'); }, sub: d.mega ? 'MEGA' : 'boss' }); }
+      }
+      const cols = 12, cs = 74, rh = 76, x0 = (C.W - cols * cs) / 2, y0 = 112;
+      let hov = null;
+      cells.forEach((cl, i) => {
+        const x = x0 + (i % cols) * cs, y = y0 + Math.floor(i / cols) * rh;
+        UI.button(c, 'cell:' + i, '', x + 2, y, cs - 4, rh - 6, { color: cl.color, size: 12 });
+        c.fillStyle = cl.unlocked ? U.rgba(cl.color, 0.12) : 'rgba(0,0,0,0.3)'; c.fillRect(x + 4, y + 2, cs - 8, rh - 10);
+        cl.draw(x + cs / 2, y + 24);
+        UI.text(c, cl.name.length > 10 ? cl.name.slice(0, 9) + '…' : cl.name, x + cs / 2, y + 52, 9, cl.unlocked ? '#fff' : '#777', 'center');
+        UI.text(c, cl.sub || '', x + cs / 2, y + 64, 8, cl.rar ? ED.items.RARITY[cl.rar].color : '#8a8aa8', 'center', false);
+        if (UI.navSel === 'cell:' + i || (m.x >= x && m.x <= x + cs && m.y >= y && m.y <= y + rh - 4)) hov = cl;
+      });
+      const total = cells.length, got = cells.filter(x => x.unlocked).length;
+      UI.text(c, got + ' / ' + total + ' unlocked', 70, 616, 13, '#ffd24a');
+      if (hov) { UI.panel(c, 70, 530, 720, 66, hov.color, 0.94); UI.text(c, hov.name, 86, 552, 16, hov.color); UI.wrap(c, hov.desc, 86, 572, 690, 15, 12, '#d8d8ee'); }
+    },
+
+    // ============================================================ pause + end
+    drawPause(g, c) {
+      c.fillStyle = 'rgba(0,0,0,0.72)'; c.fillRect(0, 0, C.W, C.H);
+      UI.shadow(c, 'PAUSED', C.W / 2, 90, 44, '#ffd24a', 'center');
+      UI.button(c, 'resume', 'Resume', 90, 130, 260, 44, { size: 18, color: '#6ee07a' });
+      UI.button(c, 'options', 'Options', 90, 184, 260, 40, { size: 16 });
+      UI.button(c, 'abandon', UI.confirm === 'abandon' ? 'Really abandon? (click again)' : 'Abandon Run', 90, 234, 260, 40, { size: 14, color: '#ff6a6a' });
+      UI.button(c, 'title', 'Quit to Title', 90, 284, 260, 40, { size: 14 });
+      // build panel
+      const p = g.player, x = 400, y = 120;
+      UI.panel(c, x, y, 520, 440, '#4a4a68', 0.85);
+      UI.text(c, 'YOUR BUILD  —  ' + ED.items.CLASSES[p.classId].name, x + 14, y + 26, 15, '#ffd24a');
+      UI.text(c, 'Floor ' + g.floorNum + ' · ' + g.run.kills + ' kills · ' + UI.timeStr(g.run.frames) + ' · seed ' + g.run.seed + ' · ' + (g.run.packs || 'v1'), x + 14, y + 46, 11, '#9a9ab8', 'left', false);
+      const rows = [['Weapon', p.weapon], ['Helmet', p.armor.helmet], ['Chest', p.armor.chest], ['Boots', p.armor.boots], ['Active', p.active && p.active.item]];
+      rows.forEach((r, i) => { const yy = y + 76 + i * 28; UI.text(c, r[0], x + 14, yy, 11, '#8a8aa8', 'left', false); if (r[1]) { ED.render.itemGlyph(c, r[1], x + 84, yy - 4, 8, 0); UI.text(c, ED.items.itemName(r[1]), x + 100, yy, 12, ED.items.itemColor(r[1])); } else UI.text(c, '—', x + 100, yy, 12, '#555'); });
+      const st = p.st;
+      const stats = ['HP ' + p.hp + '/' + p.maxHp, 'DEF ' + st.def.toFixed(1), 'DMG x' + st.dmg.toFixed(2), 'ATK SPD x' + st.atkSpd.toFixed(2), 'CRIT ' + Math.round(st.crit * 100) + '% (x' + st.critMult.toFixed(1) + ')', 'MOVE x' + st.speed.toFixed(2), 'LUCK ' + st.luck.toFixed(1), 'THORNS ' + st.thorns];
+      stats.forEach((s2, i) => UI.text(c, s2, x + 330 + (i % 2) * 90, y + 82 + Math.floor(i / 2) * 22, 10, '#c8c8e0', 'left', false));
+      UI.text(c, 'RELICS', x + 14, y + 236, 12, '#ffd24a');
+      const ids = Object.keys(p.relics), m = ED.input.mouse; let tip = null;
+      ids.forEach((id, i) => { const rx = x + 14 + (i % 13) * 38, ry = y + 246 + Math.floor(i / 13) * 38; const r = ED.items.relic(id); c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(rx, ry, 34, 34); c.strokeStyle = ED.items.RARITY[r.rarity].color; c.strokeRect(rx + 0.5, ry + 0.5, 33, 33); ED.render.itemGlyph(c, { cat: 'relic', id }, rx + 17, ry + 17, 10, 0); if (p.relics[id] > 1) UI.text(c, 'x' + p.relics[id], rx + 32, ry + 32, 9, '#fff', 'right'); if (m.x >= rx && m.x <= rx + 34 && m.y >= ry && m.y <= ry + 34) tip = { id, rx, ry }; });
+      if (!ids.length) UI.text(c, 'None yet — find them in treasure rooms, shops, shrines...', x + 14, y + 266, 11, '#6a6a88', 'left', false);
+      p.buffs.forEach((b, i) => UI.text(c, '+ ' + b.name, x + 14 + (i % 3) * 160, y + 380 + Math.floor(i / 3) * 14, 10, '#6ee07a', 'left', false));
+      p.curses.forEach((b, i) => UI.text(c, '- ' + b.name, x + 14 + (i % 3) * 160, y + 410 + Math.floor(i / 3) * 14, 10, '#ff6a8a', 'left', false));
+      if (tip) UI.drawItemTip(g, c, { cat: 'relic', id: tip.id }, tip.rx + 17, tip.ry + 40, false);
+    },
+    drawEnd(g, c) {
+      const v = g.scene === 'victory', r = g.run, p = g.player, t = g.deadT;
+      const a = U.clamp(t / 40, 0, 1);
+      c.fillStyle = 'rgba(' + (v ? '10,12,4' : '14,2,4') + ',' + 0.82 * a + ')'; c.fillRect(0, 0, C.W, C.H);
+      c.save(); c.globalAlpha = a;
+      UI.shadow(c, v ? 'VICTORY' : 'YOU DIED', C.W / 2, 82, 56, v ? '#ffd24a' : '#ff3b4a', 'center');
+      UI.text(c, v ? 'You cashed out with your treasures on floor ' + r.floorNum : 'Slain by ' + (r.killedBy || 'the dark') + ' on floor ' + r.floorNum + ' — ' + g.dif.dangerName + ' danger', C.W / 2, 112, 15, '#d0d0e8', 'center', false);
+      const meta = ED.save.meta, res = g.runResult || {};
+      if (res.newBest) UI.shadow(c, '★ NEW PERSONAL BEST ★', C.W / 2, 140, 18, '#ffd24a', 'center');
+      else UI.text(c, 'Deepest floor: ' + meta.bestFloor, C.W / 2, 140, 15, '#ffd24a', 'center');
+      const x = 110, y = 160;
+      UI.panel(c, x, y, 740, 300, '#4a4a68', 0.8);
+      const L = [['Deepest floor', r.floorNum], ['Enemies slain', r.kills], ['Rooms cleared', r.roomsCleared], ['Gold collected', r.goldEarned], ['Items collected', r.itemsTaken + Object.keys(p.relics).reduce((s, k) => s + p.relics[k], 0)], ['Damage taken', r.damageTaken], ['Time', UI.timeStr(r.frames)], ['Bosses slain', r.bossesKilled.length], ['Mini bosses slain', r.minisKilled.length], ['Locks opened', r.locksOpened || 0]];
+      L.forEach((row, i) => { const cx = x + 24 + (i % 2) * 360, cy = y + 36 + Math.floor(i / 2) * 30; UI.text(c, row[0], cx, cy, 14, '#9a9ab8', 'left', false); UI.text(c, String(row[1]), cx + 240, cy, 16, '#fff', 'right'); });
+      UI.text(c, 'SCORE ' + M.score(g), x + 370, y + 206, 26, '#ffd24a', 'center');
+      UI.text(c, 'SEED', x + 24, y + 250, 13, '#9a9ab8'); UI.text(c, r.seed, x + 74, y + 252, 24, '#7fd8ff'); UI.text(c, 'edition ' + (r.packs || 'v1'), x + 24, y + 290, 11, '#8a8aa8', 'left', false);
+      UI.text(c, 'best on this seed: floor ' + (meta.bestBySeed[r.seed] || r.floorNum), x + 24, y + 274, 11, '#8a8aa8', 'left', false);
+      UI.text(c, ED.items.CLASSES[r.classId].name + ' · ' + ED.items.itemName(p.weapon), x + 716, y + 252, 13, '#c8c8e0', 'right');
+      const rl = Object.keys(p.relics);
+      rl.slice(0, 28).forEach((id, i) => ED.render.itemGlyph(c, { cat: 'relic', id }, x + 400 + (i % 14) * 22, y + 262 + Math.floor(i / 14) * 22, 7, 0));
+      if (r.unlockedNow.length) UI.text(c, 'Unlocked this run: ' + r.unlockedNow.slice(0, 3).join(', '), C.W / 2, 478, 12, '#ffd24a', 'center', false);
+      c.restore();
+      UI.btns = [];
+      if (t >= 25) {
+        UI.button(c, 'retry', 'Retry this seed', 120, 500, 220, 44, { size: 16, color: '#6ee07a' });
+        UI.button(c, 'new', 'New run', 370, 500, 220, 44, { size: 16, color: '#ffb04a' });
+        UI.button(c, 'title', 'Title screen', 620, 500, 220, 44, { size: 16 });
+        UI.button(c, 'copy', 'Copy run summary', 370, 552, 220, 34, { size: 13 });
+      }
+    },
+  };
+  // let ui.js call updateMenu / drawMenu through ED.ui
+  UI.updateMenu = M.updateMenu; UI.drawMenu = M.drawMenu; UI.drawPause = M.drawPause;
+})(typeof globalThis !== 'undefined' ? globalThis : this);

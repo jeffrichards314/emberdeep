@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EMBERDEEP — an endless roguelike descent</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #050409; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
+  #wrap { position: relative; width: min(100vw, 150vh); aspect-ratio: 960 / 640; box-shadow: 0 0 60px rgba(255,120,40,0.15); }
+  canvas { width: 100%; height: 100%; display: block; background: #07060c; image-rendering: auto; outline: none; }
+  noscript { color: #fff; font-family: monospace; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game" width="960" height="640" tabindex="0"></canvas></div>
+<noscript>EMBERDEEP needs JavaScript enabled.</noscript>
+<!-- Classic scripts (no ES modules) so the game runs straight from file:// -->
+<script src="js/util.js"></script>
+<script src="js/save.js"></script>
+<script src="js/packs.js"></script>
+<script src="js/difficulty.js"></script>
+<script src="js/input.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/items.js"></script>
+<script src="js/rooms.js"></script>
+<script src="js/enemies.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/player.js"></script>
+<script src="js/attacks.js"></script>
+<script src="js/bosses.js"></script>
+<script src="js/minibosses.js"></script>
+<script src="js/keys.js"></script>
+<script src="js/generator.js"></script>
+<script src="js/specials.js"></script>
+<script src="js/flow.js"></script>
+<!-- content packs (each is switchable on the Versions screen) -->
+<script src="js/pack_v2.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/menus.js"></script>
+<script src="js/debug.js"></script>
+<script src="js/main.js"></script>
+<script>
+  window.addEventListener('load', function () { ED.boot(); document.getElementById('game').focus(); });
+</script>
+</body>
+</html>
