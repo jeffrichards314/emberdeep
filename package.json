@@ -12,5 +12,13 @@
     "parity": "node test/parity.js",
     "test:touch": "node test/touch.js"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "homepage": "https://jeffrichards314.github.io/emberdeep/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeffrichards314/emberdeep.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jeffrichards314/emberdeep/issues"
+  }
 }

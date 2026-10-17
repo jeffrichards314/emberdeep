@@ -16,7 +16,7 @@ Every sprite is a coloured shape; every sound is synthesised; the soundtrack is 
 
 ## Run it
 
-Pick any one:
+**Play online:** <https://jeffrichards314.github.io/emberdeep/> — works on desktop, phone and tablet (GitHub Pages; every push to `main` is tested and then published automatically). Or pick any one of these to run it yourself:
 
 ```bash
 open index.html                 # just double-click / open the file — it works straight from file://
