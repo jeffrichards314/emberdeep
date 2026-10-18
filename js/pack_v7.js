@@ -135,8 +135,8 @@
     for (let i = 0; i < 3; i++) {
       const s = p.belt[i], x = x0 + i * 40, d = s && PROV[s.id];
       c.fillStyle = 'rgba(8,8,16,0.85)'; c.fillRect(x, y0, 36, 36); c.strokeStyle = d ? d.color : '#3a3a50'; c.lineWidth = d ? 2 : 1.5; c.strokeRect(x + 0.5, y0 + 0.5, 35, 35);
-      if (d) { ED.consumableGlyph(c, { id: s.id }, x + 18, y0 + 18, 9, 0); if (s.n > 1) UI.text(c, 'x' + s.n, x + 34, y0 + 33, 10, '#fff', 'right'); if (p.provCd > 0) { c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(x, y0, 36, 36 * p.provCd / 18); } }
-      UI.text(c, ED.input.key1('item' + (i + 1)), x + 4, y0 + 11, 9, d ? '#cfd0ee' : '#5a5a70');
+      if (d) { ED.consumableGlyph(c, { id: s.id }, x + 18, y0 + 18, 9, 0); if (s.n > 1) UI.text(c, 'x' + s.n, x + 34, y0 + 33, ED.skin.on() ? 13 : 10, '#fff', 'right'); if (p.provCd > 0) { c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(x, y0, 36, 36 * p.provCd / 18); } }
+      UI.text(c, ED.input.key1('item' + (i + 1)), x + 4, y0 + (ED.skin.on() ? 14 : 11), ED.skin.on() ? 13 : 9, d ? '#cfd0ee' : '#5a5a70');
     }
     const m = ED.input.mouse;
     for (let i = 0; i < 3; i++) { const s = p.belt[i], x = x0 + i * 40; if (s && m.x >= x && m.x <= x + 36 && m.y >= y0 && m.y <= y0 + 36) { const d = PROV[s.id]; UI.panel(c, x0 - 150, y0 - 52, 190, 46, d.color, 0.95); UI.text(c, d.name, x0 - 142, y0 - 36, 11, d.color); UI.wrap(c, d.desc, x0 - 142, y0 - 22, 176, 10, 8, '#cfd0e0'); } }

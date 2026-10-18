@@ -116,8 +116,8 @@
   ED.hook('intro', 'v1', (g, c) => {
     const wi = own(g); if (!wi) return; const UI = ED.ui, w = wi.w;
     if (wi.first) UI.shadow(c, 'WORLD ' + wi.number, C.W / 2, 112, 16, w.color, 'center');
-    const rule = w.rule, cut = rule.length > 118 ? rule.lastIndexOf(' ', Math.floor(rule.length / 2) + 8) : -1, ry = g.floor.isMega ? 236 : 206;           // a long rule goes on two lines instead of off the screen
-    (cut > 0 ? [rule.slice(0, cut), rule.slice(cut + 1)] : [rule]).forEach((ln, i) => UI.text(c, ln, C.W / 2, ry + i * 15 - (cut > 0 ? 8 : 0), 12, wi.first ? '#e8e8f4' : '#8a8aa8', 'center', false));
+    const sk = ED.skin.on(), rule = w.rule, cut = rule.length > (sk ? 96 : 118) ? rule.lastIndexOf(' ', Math.floor(rule.length / 2) + 8) : -1, ry = g.floor.isMega ? 236 : 206;           // a long rule goes on two lines instead of off the screen
+    (cut > 0 ? [rule.slice(0, cut), rule.slice(cut + 1)] : [rule]).forEach((ln, i) => UI.text(c, ln, C.W / 2, ry + i * (sk ? 19 : 15) - (cut > 0 ? 8 : 0), sk ? 14 : 12, wi.first ? '#e8e8f4' : sk ? '#9a9ab4' : '#8a8aa8', 'center', false));
     if (wi.first) { const nf = w.enemies.filter(id => ED.enemyTypes[id] && P.ok(ED.enemyTypes[id])).map(id => ED.enemyTypes[id].name); if (nf.length) UI.text(c, 'Foes of this land: ' + nf.join(', '), C.W / 2, 388, 14, '#ffd24a', 'center'); }
   });
   // ------------------------------------------------------------------ temporary terrain: water, spikes, a plank that falls away.  Any land may swap tiles for a while; they drain back by themselves.

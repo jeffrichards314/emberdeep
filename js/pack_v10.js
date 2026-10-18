@@ -171,7 +171,7 @@
   ED.hook('selectUI', V, (g, c) => { const t = titleOf(), cls = ED.ui.selClass, lv = levelFor(cls); UI().text(c, (t ? '★ ' + t + '   ·   ' : '') + (I.CLASSES[cls] ? I.CLASSES[cls].name : '') + ' mastery ' + lv + (lv >= MAXL ? ' (max)' : ''), 950, 574, 11, '#c8a0ff', 'right', false); });
 
   // ------------------------------------------------------------------ the LEGACY scene
-  let tab = 'feats', beSub = 'foes', bePage = 0, beSel = null;
+  let tab = 'feats', beSub = 'foes', bePage = 0, beSel = null, fpage = 0, maSel = null;     // (fpage / maSel: the polished layout's feat page and chosen class)
   const tier = (k) => k >= 250 ? 3 : k >= 50 ? 2 : k >= 10 ? 1 : 0, TIER_COL = ['#5a5a78', '#c08a5a', '#c8d0e0', '#ffd24a'];
   const foeList = () => Object.values(ED.enemyTypes).filter(d => d.id !== 'boss' && P.ok(d) && (d.weight > 0 || ED.save.meta.seen.enemies[d.id])).sort((a, b) => (a.minFloor || 0) - (b.minFloor || 0) || a.name.localeCompare(b.name));
   const bossList = () => { const out = []; for (const id of ED.bosses.allIds()) { const d = ED.bosses.def(id); if (d && P.ok(d)) out.push({ id, name: d.name, title: d.title || '', color: d.color, mega: !!d.mega, teaches: d.teaches || '', kind: d.mega ? 'MEGA BOSS' : 'FLOOR BOSS' }); }
@@ -241,10 +241,81 @@
       else if (a.indexOf('wear:') === 0) { L.title = a.slice(5); save(); g.sfx('ui'); }
       else if (a.indexOf('sub:') === 0) { beSub = a.slice(4); bePage = 0; beSel = null; g.sfx('ui'); }
       else if (a === 'page') { bePage++; g.sfx('ui'); }
+      else if (a === 'fp:prev' || a === 'fp:next') { fpage += a === 'fp:next' ? 1 : -1; g.sfx('ui'); }
+      else if (a === 'bp:prev' || a === 'bp:next') { bePage += a === 'bp:next' ? 1 : -1; g.sfx('ui'); }
+      else if (a.indexOf('ms:') === 0) { maSel = a.slice(3); g.sfx('ui'); }
       else if (a.indexOf('be:') === 0) { beSel = a.slice(3); g.sfx('ui'); }
       else if (a.indexOf('skin:') === 0) { const [, cls, id] = a.split(':'); if (!id) L.skin[cls] = ''; else if (skinOpen(cls, id)) L.skin[cls] = id; else { g.sfx('deny'); return; } save(); g.sfx('ui'); }
       else if (a.indexOf('trail:') === 0) { const id = a.slice(6); if (!id) L.trail = ''; else if (trailOpen(id)) L.trail = id; else { g.sfx('deny'); return; } save(); g.sfx('ui'); }
     },
+  };
+
+  // polished layout (v23 POLISH): the same ids and update() as the classic scene above, plus feat / bestiary pages (fp:, bp:) and a class list on the mastery tab (ms:)
+  (ED.skin.screens = ED.skin.screens || {}).legacy = function (g, c) {
+    const K = ED.skin.kit, COL = K.COL, u = UI(), L = meta(), VI = '#c8a0ff'; u.navMode = 'spatial';
+    K.head(c, 'LEGACY', { y: 50, color: VI, rule: 220 });
+    [['feats', 'Feats'], ['bestiary', 'Bestiary'], ['mastery', 'Mastery']].forEach(([id, lab], i) => u.button(c, 'tab:' + id, lab, 240 + i * 176, 80, 168, 40, { size: 16, color: VI, selected: tab === id }));
+    const pager = (idp, page, pages, y) => { u.button(c, idp + ':prev', '‹ Prev', 640, y, 96, 32, { size: 14, disabled: page <= 0 }); K.text(c, 'page ' + (page + 1) + ' / ' + pages, 790, y + 21, 15, COL.mute, 'center'); u.button(c, idp + ':next', 'Next ›', 844, y, 68, 32, { size: 14, disabled: page >= pages - 1 }); };
+    if (tab === 'feats') {
+      const x = ctxOf(g, false); if (!x.run) x.run = { floorNum: 0, kills: 0, bossesKilled: [], minisKilled: [], seed: '' };
+      const per = 12, pages = Math.max(1, Math.ceil(FEATS.length / per)); fpage = U.clamp(fpage, 0, pages - 1);
+      FEATS.slice(fpage * per, fpage * per + per).forEach((f, i) => {
+        const px = 48 + (i % 2) * 440, py = 136 + Math.floor(i / 2) * 62, got = L.feats[f.id] !== undefined, locked = !!(f.need && !P.on(f.need)), wear = L.title === f.id;
+        u.button(c, got ? 'wear:' + f.id : 'x:' + f.id, '', px, py, 424, 54, { color: wear ? COL.gold : VI, selected: false, disabled: !got, nav: got, ghost: !got });
+        c.fillStyle = got ? VI : 'rgba(255,255,255,0.14)'; c.beginPath(); c.arc(px + 22, py + 27, 8, 0, TAU); c.fill(); if (got) { c.strokeStyle = '#14101e'; c.lineWidth = 2.5; c.beginPath(); c.moveTo(px + 18, py + 27); c.lineTo(px + 21, py + 30); c.lineTo(px + 27, py + 23); c.stroke(); }
+        u.text(c, K.fit(c, f.name, 15, got ? 226 : 380, true), px + 42, py + 23, 15, got ? '#fff' : locked ? '#5a5a70' : '#9a9ab4', 'left');
+        let line = f.desc; if (!got && f.prog) { const pr = f.prog(x); line += '  (' + pr[0] + '/' + pr[1] + ')'; } if (locked) line += '  [needs ' + P.BY_ID[f.need].name + ']';
+        K.text(c, K.fit(c, line, 13, 372, false), px + 42, py + 43, 13, got ? '#cfcfe6' : COL.dim);
+        if (got) u.text(c, K.fit(c, '★ ' + f.title, 13, 140, false), px + 410, py + 23, 13, wear ? COL.gold : VI, 'right', false);
+      });
+      K.text(c, earned() + ' of ' + FEATS.length + ' feats' + (titleOf() ? '  ·  wearing ' + titleOf() : ''), 48, 596, 15, VI);
+      K.text(c, 'Tap an earned feat to wear its title.', 48, 618, 13, COL.dim); if (pages > 1) pager('fp', fpage, pages, 584);
+    } else if (tab === 'bestiary') {
+      [['foes', 'Foes'], ['bosses', 'Bosses']].forEach(([id, lab], i) => u.button(c, 'sub:' + id, lab, 48 + i * 112, 136, 104, 34, { size: 14, color: '#9ad0ff', selected: beSub === id }));
+      const list = beSub === 'foes' ? foeList() : bossList(), per = 48, pages = Math.max(1, Math.ceil(list.length / per)); bePage = U.clamp(bePage, 0, pages - 1);
+      const seen = ED.save.meta.seen, B = L.bestiary, isKnown = (d, rec) => beSub === 'foes' ? !!(seen.enemies[d.id] || rec.k) : !!(rec.k || ED.save.meta.unlocked.bosses[d.id] || ED.save.meta.unlocked.minis[d.id]);
+      list.slice(bePage * per, bePage * per + per).forEach((d, i) => {
+        const x = 48 + (i % 8) * 62, y = 184 + Math.floor(i / 8) * 62, rec = B[d.id] || { k: 0, d: 0 }, known = isKnown(d, rec), on = beSel === d.id;
+        u.button(c, 'be:' + d.id, '', x, y, 56, 56, { color: known ? d.color : '#5a5a78', selected: on, ghost: !known });
+        if (!known) u.text(c, '?', x + 28, y + 36, 20, '#5a5a78', 'center'); else if (beSub === 'foes') { c.fillStyle = d.color; c.strokeStyle = '#10101c'; c.lineWidth = 2; ED.render.shape(c, d.shape, x + 28, y + 28, Math.min(14, d.r), 0, u.t); c.fill(); c.stroke(); } else ED.icons.draw(c, 'skull', x + 28, y + 28, 12, d.color);
+        for (let k = 0; k < tier(rec.k); k++) { c.fillStyle = TIER_COL[tier(rec.k)]; c.fillRect(x + 8 + k * 8, y + 46, 6, 4); }
+      });
+      if (pages > 1) pager('bp', bePage, pages, 584);
+      K.text(c, list.filter(d => isKnown(d, B[d.id] || { k: 0 })).length + ' of ' + list.length + ' met', 48, 604, 15, '#9ad0ff');
+      const px = 568, py = 136, pw = 344, ph = 430, d = list.find(x => x.id === beSel); K.glass(c, px, py, pw, ph, { a: 0.82, accent: d ? d.color : null });
+      if (!d) K.wrap(c, 'Pick an entry.  Studied marks come at 10, 50 and 250 kills.', px + 30, py + 190, pw - 60, 22, 16, COL.dim);
+      else { const rec = B[d.id] || { k: 0, d: 0 }, known = isKnown(d, rec);
+        if (!known) K.text(c, 'You have not met this one yet.', px + pw / 2, py + 200, 16, COL.dim, 'center');
+        else if (beSub === 'foes') {
+          c.fillStyle = d.color; c.strokeStyle = '#10101c'; c.lineWidth = 3; ED.render.shape(c, d.shape, px + 50, py + 56, 26, 0, u.t); c.fill(); c.stroke(); u.shadow(c, K.fit(c, d.name, 22, pw - 120, true), px + 92, py + 50, 22, d.color, 'left');
+          K.text(c, 'from floor ' + d.minFloor + (d.world ? '  ·  ' + d.world : ''), px + 92, py + 72, 13, COL.mute);
+          let y = py + 112; for (const [k, v] of [['HP', d.hp], ['Speed', d.speed], ['Contact', d.dmg || 0]].concat(d.shot ? [['Shot', d.shot]] : [])) { K.text(c, k, px + 30, y, 15, COL.mute); u.text(c, String(v), px + pw - 30, y, 16, COL.ink, 'right'); y += 26; }
+          y = K.wrap(c, d.desc || '', px + 30, y + 14, pw - 60, 20, 14, '#dcdcf0') + 10; K.rule(c, px + 30, y, pw - 60); y += 28;
+          u.text(c, 'Slain ' + rec.k + '   ·   killed you ' + rec.d + 'x', px + 30, y, 15, '#fff', 'left'); K.text(c, ['Not studied yet (10 kills)', 'Studied (next mark at 50)', 'Well studied (next mark at 250)', 'Mastered'][tier(rec.k)], px + 30, y + 24, 13, TIER_COL[tier(rec.k)]);
+        } else {
+          u.shadow(c, K.fit(c, d.name, 22, pw - 60, true), px + 30, py + 50, 22, d.color, 'left'); K.text(c, K.fit(c, d.kind + (d.title ? '  ·  ' + d.title : ''), 13, pw - 60, false), px + 30, py + 74, 13, COL.mute);
+          let y = K.wrap(c, d.teaches || '', px + 30, py + 112, pw - 60, 20, 14, '#dcdcf0') + 14; K.rule(c, px + 30, y, pw - 60); y += 28; u.text(c, 'Defeated ' + rec.k + 'x   ·   killed you ' + rec.d + 'x', px + 30, y, 15, '#fff', 'left');
+        } }
+    } else {
+      const classes = I.classList(); if (!maSel || !classes.find(x => x.id === maSel)) maSel = classes[0].id;
+      K.text(c, 'Mastery grows with every run.  Skins unlock per class; trails unlock from your total mastery (' + totalLevels() + ').', C.W / 2, 148, 14, COL.mute, 'center');
+      classes.forEach((cl, i) => {
+        const y = 164 + i * 36, xp = L.mastery[cl.id] || 0, lv = levelOf(xp), on = cl.id === maSel;
+        u.button(c, 'ms:' + cl.id, '', 48, y, 300, 32, { color: cl.color, selected: on, ghost: !on });
+        c.fillStyle = cl.color; c.strokeStyle = '#10101c'; c.lineWidth = 2; c.beginPath(); c.arc(70, y + 16, 9, 0, TAU); c.fill(); c.stroke();
+        u.text(c, cl.name, 90, y + 21, 15, '#fff', 'left'); u.text(c, 'LV ' + lv + (lv >= MAXL ? ' MAX' : ''), 334, y + 21, 14, lv >= MAXL ? COL.gold : VI, 'right');
+      });
+      const cl = classes.find(x => x.id === maSel), xp = L.mastery[cl.id] || 0, lv = levelOf(xp), cur = L.skin[cl.id] || '', px = 368, py = 164, pw = 544, ph = 392; K.glass(c, px, py, pw, ph, { a: 0.82, accent: cl.color });
+      u.shadow(c, cl.name, px + 28, py + 44, 26, cl.color, 'left'); const span = lv >= MAXL ? 1 : need(lv + 1) - (lv ? need(lv) : 0), have = lv >= MAXL ? 1 : xp - (lv ? need(lv) : 0);
+      K.text(c, 'level ' + lv + (lv >= MAXL ? ' (max)' : '   ·   ' + have + ' / ' + span + ' to the next'), px + 28, py + 70, 15, COL.mute); K.rr(c, px + 28, py + 82, pw - 56, 10, 5); c.fillStyle = 'rgba(255,255,255,0.1)'; c.fill(); if (have > 0) { K.rr(c, px + 28, py + 82, Math.max(10, (pw - 56) * have / span), 10, 5); c.fillStyle = VI; c.fill(); }
+      K.label(c, 'SKIN', px + 28, py + 128, pw - 56, VI);
+      u.button(c, 'skin:' + cl.id + ':', 'None', px + 28, py + 142, 92, 38, { size: 14, selected: !cur });
+      SKINS.forEach((s, k) => { const open = lv >= s.lvl; u.button(c, 'skin:' + cl.id + ':' + s.id, open ? s.name : 'LV ' + s.lvl, px + 128 + (k % 3) * 126, py + 142 + Math.floor(k / 3) * 46, 118, 38, { size: 13, color: s.col, disabled: !open, selected: cur === s.id, textColor: open ? s.col : undefined }); });
+      K.label(c, 'TRAIL  (total mastery ' + totalLevels() + ')', px + 28, py + 262, pw - 56, VI);
+      u.button(c, 'trail:', 'None', px + 28, py + 276, 92, 38, { size: 14, selected: !L.trail });
+      TRAILS.forEach((t, k) => { const open = totalLevels() >= t.total; u.button(c, 'trail:' + t.id, open ? t.name.replace(/ Trail$/, '') : 'total ' + t.total, px + 128 + (k % 3) * 126, py + 276 + Math.floor(k / 3) * 46, 118, 38, { size: 13, color: t.col, disabled: !open, selected: L.trail === t.id, textColor: open ? t.col : undefined }); });
+    }
+    K.back(c, 'back', 'Back');
   };
 
   ED.legacy = { FEATS, FEAT, SKINS, TRAILS, SK, TR, meta, check, levelOf, levelFor, totalLevels, need, xpOf, skinOpen, trailOpen, skinColor, titleOf, bump, MAXL, tier };

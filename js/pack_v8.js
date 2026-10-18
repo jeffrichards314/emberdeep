@@ -90,8 +90,8 @@
       const cls = I.CLASSES[r.classId];
       UI.panel(c, 250, 280, 460, 120, '#6a3a30', 0.85);
       UI.text(c, (cls ? cls.name : '?') + ' · floor ' + g.floorNum + ' · ' + UI.timeStr(r.frames) + ' · ' + r.kills + ' kills', C.W / 2, 312, 14, '#ffd0a0', 'center');
-      UI.text(c, 'edition ' + (r.packs || ED.packs.stamp()) + (r.heatLevel ? ' · Heat ' + r.heatLevel : '') + ' · seed ' + r.seed, C.W / 2, 338, 12, '#a88a7a', 'center', false);
-      UI.text(c, 'Endings reached: ' + (ED.save.meta.endings || 0), C.W / 2, 364, 12, '#a88a7a', 'center', false);
+      UI.text(c, 'edition ' + (r.packs || ED.packs.stamp()) + (r.heatLevel ? ' · Heat ' + r.heatLevel : '') + ' · seed ' + r.seed, C.W / 2, 338, 13, '#b89a8a', 'center', false);
+      UI.text(c, 'Endings reached: ' + (ED.save.meta.endings || 0), C.W / 2, 364, 13, '#b89a8a', 'center', false);
       if (m.t > 40) {
         UI.button(c, 'bank', 'Claim the true victory (end the run)', 250, 430, 460, 46, { size: 16, color: '#ffd24a', sub: 'score ' + ED.menus.score(g) });
         UI.button(c, 'abyss', 'Descend into the Abyss', 250, 486, 460, 46, { size: 16, color: '#ff5a3a', sub: 'the run continues — it only gets worse' });
@@ -132,7 +132,7 @@
     if (r.roomClear) r.roomClear(g);
     const gold = 14 + Math.round(g.floorNum * 0.6); g.dropGold(480, 300, gold);                    // the Abyss pays
   });
-  ED.hook('intro', V, (g, c) => { const r = cur(g); if (!r) return; ED.ui.shadow(c, '☠ ABYSSAL RULE: ' + r.name.toUpperCase(), C.W / 2, 408, 16, '#ff5a3a', 'center'); ED.ui.text(c, r.desc + '  (+gold from every room)', C.W / 2, 430, 12, '#e8b0a0', 'center', false); });
+  ED.hook('intro', V, (g, c) => { const r = cur(g); if (!r) return; ED.ui.shadow(c, '☠ ABYSSAL RULE: ' + r.name.toUpperCase(), C.W / 2, 408, 16, '#ff5a3a', 'center'); ED.ui.text(c, r.desc + '  (+gold from every room)', C.W / 2, ED.skin.on() ? 432 : 430, ED.skin.on() ? 14 : 12, '#e8b0a0', 'center', false); });
   ED.hook('hud', V, (g, c) => { const r = cur(g); if (r) ED.ui.text(c, '☠ ' + r.name, 818, 63, 9, '#ff5a3a', 'left', false); });
   ED.hook('floorStart', V, (g) => { if (g.floorNum % 50 === 0) g.after(30, () => g.toast('Something enormous stirs beneath this floor...', '#ff5a3a', 200)); });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

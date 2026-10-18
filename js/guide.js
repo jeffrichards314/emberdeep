@@ -104,5 +104,5 @@
       if (a && a.indexOf('pg:') === 0) { sel = a.slice(3); g.sfx('ui'); }
     },
   };
-  ED.guide = { PAGES, pages, fits(c, id) { const p = P.BY_ID[id]; let h = 0; for (const t of p.guide) h += ED.ui.wrapHeight(c, t, 570, 17, 13) + 10; return h; } };
+  ED.guide = { PAGES, pages, selected: () => sel, fits(c, id) { const p = P.BY_ID[id]; let h = 0; for (const t of p.guide) h += ED.ui.wrapHeight(c, t, 570, 17, 13) + 10; return h; } };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -200,7 +200,7 @@
     });
     if (!items.length) u.text(c, tab === 'lands' ? 'No land found yet. Turn on "reveal everything" to see them all.' : 'Nothing here yet — meet one in a run, or turn on "reveal everything".', C.W / 2, 300, 14, '#8a8aa8', 'center', false);
     if (pages > 1) { u.button(c, 'pg:prev', '◂ Prev', 40, 600, 90, 28, { size: 12, disabled: S.page === 0 }); u.text(c, 'page ' + (S.page + 1) + ' / ' + pages, 190, 619, 12, '#a8a8c8', 'center', false); u.button(c, 'pg:next', 'Next ▸', 250, 600, 90, 28, { size: 12, disabled: S.page >= pages - 1 }); }
-    u.text(c, found + ' / ' + total + ' discovered' + (gmeta().reveal ? '  ·  showing everything' : ''), 360, 619, 12, '#ffd24a', 'left');
+    u.text(c, found + ' / ' + total + ' discovered' + (gmeta().reveal ? '  ·  showing everything' : ''), 360, 619, ED.skin.on() ? 14 : 12, '#ffd24a', 'left');
     if (hov) { u.panel(c, 40, 548, 880, 44, hov.color, 0.94); u.text(c, (hov.found || gmeta().reveal ? hov.name : '???'), 54, 568, 14, hov.color); const d = hov.def, desc = hov.tab === 'foes' ? d.desc : hov.tab === 'lands' ? d.rule : (d.title || '') + (d.teaches ? ' — ' + d.teaches : ''); if (hov.found || gmeta().reveal) u.wrap(c, desc || '', 54, 584, 850, 13, 10, '#d8d8ee'); else u.text(c, 'Not met yet.', 54, 584, 11, '#8a8aa8', 'left', false); }
   }
 
@@ -279,17 +279,17 @@
   ED.sceneImpl.gallery = {
     draw(g, c) {
       const u = UI(); S.t++;
-      const meta = gmeta(), tab = meta.tab;
+      const meta = gmeta(), tab = meta.tab, sk = ED.skin.on() && ED.skin.kit;               // (polished: bigger controls, Back in the corner every screen has it)
       u.shadow(c, 'GALLERY', C.W / 2, 40, 30, '#9ad0ff', 'center');
       if (S.mode === 'inspect' && S.ent) drawInspect(g, c);
       else if (S.mode === 'setup' && S.ent) { drawInspect(g, c); c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(0, 0, C.W, C.H); drawSetup(g, c); return; }
       else {
-        TABS.forEach((t2, i) => u.button(c, 'tab:' + t2.id, t2.name, 40 + i * 104, 56, 100, 28, { size: 13, selected: tab === t2.id, color: '#9ad0ff' }));
-        u.button(c, 'reveal', 'REVEAL ALL: ' + (meta.reveal ? 'ON' : 'off'), 480, 56, 170, 28, { size: 11, selected: meta.reveal, color: '#ffd24a' });
-        u.button(c, 'sheet', S.sheet ? 'GRID' : 'CONTACT SHEET', 658, 56, 150, 28, { size: 11, selected: S.sheet });
+        TABS.forEach((t2, i) => u.button(c, 'tab:' + t2.id, t2.name, 40 + i * (sk ? 108 : 104), 54, sk ? 104 : 100, sk ? 34 : 28, { size: sk ? 15 : 13, selected: tab === t2.id, color: '#9ad0ff' }));
+        u.button(c, 'reveal', 'Reveal all: ' + (meta.reveal ? 'ON' : 'off'), sk ? 500 : 480, 54, sk ? 200 : 170, sk ? 34 : 28, { size: sk ? 14 : 11, selected: meta.reveal, color: '#ffd24a' });
+        u.button(c, 'sheet', S.sheet ? 'Grid' : 'Contact sheet', sk ? 712 : 658, 54, sk ? 208 : 150, sk ? 34 : 28, { size: sk ? 14 : 11, selected: S.sheet });
         drawGrid(g, c);
       }
-      u.button(c, 'back', 'Back', C.W - 140, 604, 100, 28, { size: 13 });
+      if (sk) u.button(c, 'back', S.mode === 'grid' ? '‹  Back' : '‹  Close', 24, 4, 116, 38, { size: 15, ghost: true }); else u.button(c, 'back', 'Back', C.W - 140, 604, 100, 28, { size: 13 });
       if (S.errors) u.text(c, S.errors + ' drawing error(s)', 20, 14, 9, '#ff6a6a', 'left', false);
     },
     update(g, a, inp) {
@@ -410,10 +410,10 @@
       const u = UI(), sp = g.run.practice, w = 460, h = 250, x = (C.W - w) / 2, y = 170;
       u.panel(c, x, y, w, h, m.won ? '#6ee07a' : '#ff6a6a', 0.97);
       u.shadow(c, m.won ? 'CLEARED' : 'DOWN', C.W / 2, y + 46, 30, m.won ? '#6ee07a' : '#ff6a6a', 'center');
-      u.text(c, 'Practice · ' + (sp.name || '') + ' · floor ' + (sp.floorNum || sp.floor), C.W / 2, y + 72, 12, '#a8a8c8', 'center', false);
+      u.text(c, 'Practice · ' + (sp.name || '') + ' · floor ' + (sp.floorNum || sp.floor), C.W / 2, y + 72, 14, '#a8a8c8', 'center', false);
       u.button(c, 'retry', 'Retry', x + 40, y + 96, w - 80, 38, { size: 15, color: '#6ee07a' });
       u.button(c, 'gallery', 'Back to the Gallery', x + 40, y + 142, w - 80, 38, { size: 14, color: '#9ad0ff' });
-      if (m.won || sp.kind === 'lands') u.button(c, 'keep', 'Keep exploring', x + 40, y + 188, w - 80, 34, { size: 12 });
+      if (m.won || sp.kind === 'lands') u.button(c, 'keep', 'Keep exploring', x + 40, y + 188, w - 80, 34, { size: 14 });
     },
     update(g, m, act, inp) {
       const sp = g.run.practice;

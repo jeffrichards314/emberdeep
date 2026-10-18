@@ -378,7 +378,7 @@
     { const L = layoutFor(mode); if (L && L !== ui.layout) place(L); }
     S.on = true;
     const p = g.player, vis = (id, on) => { const d = on ? '' : 'none'; if (ui.btn[id].style.display !== d) ui.btn[id].style.display = d; };
-    if (mode === 'menu') { vis('back', g.scene !== 'title' && g.scene !== 'intro'); return; }
+    if (mode === 'menu') { vis('back', g.scene !== 'title' && g.scene !== 'intro' && !(ED.ui.prevBtns || []).some(b => b.id === 'back')); return; }        // (the polished screens carry their own Back button)
     // play (or the options preview): live state on the buttons
     const hasP = p && g.run && mode === 'play', belt = !!(p && p.belt) || mode === 'pv';
     for (let i = 1; i <= 3; i++) vis('item' + i, belt);
@@ -433,7 +433,9 @@
       if (a) g.sfx('ui');
     },
     draw(g, c) {
-      const UI = ED.ui, s = cfg(), x = 230, w = 500;
+      const UI = ED.ui, s = cfg(), K = ED.skin.kit, polished = ED.skin.on() && K;
+      if (polished) return polishedDraw(g, c, UI, s, K);
+      const x = 230, w = 500;
       UI.shadow(c, 'TOUCH CONTROLS', C.W / 2, 62, 32, '#7fd8ff', 'center');
       UI.text(c, 'Drag the left side to move. Hold ATTACK to shoot (drag it to aim, or let it pick the nearest foe).', C.W / 2, 86, 12, '#a8a8c8', 'center', false);
       const mode = s.mode === 'auto' ? 'AUTO (on phones and tablets)' : s.mode === 'on' ? 'ALWAYS ON' : 'OFF';
@@ -451,4 +453,18 @@
       UI.button(c, 'back', 'Back', x, 566, w, 40, { size: 16 });
     },
   };
+  /** the polished page: the controls themselves are previewed over it (see T.frame), so the middle is kept clear of buttons on the left and right */
+  function polishedDraw(g, c, UI, s, K) {
+    const COL = K.COL, x = 250, w = 460, hw = (w - 12) / 2;
+    K.head(c, 'TOUCH CONTROLS', { y: 50, color: COL.cyan, rule: 260, sub: 'Drag the left side to move.  Hold ATTACK to shoot: drag it to aim, or let it pick the nearest foe.' });
+    UI.button(c, 'mode', 'Touch controls: ' + (s.mode === 'auto' ? 'Auto' : s.mode === 'on' ? 'Always on' : 'Off'), x, 118, w, 40, { size: 16 });
+    UI.button(c, 'size', 'Size: ' + SIZE_NAMES[SIZES.indexOf(s.size)].toLowerCase(), x, 166, hw, 40, { size: 15 }); UI.button(c, 'opacity', 'Look: ' + OPAC_NAMES[OPACS.indexOf(s.opacity)].toLowerCase(), x + hw + 12, 166, hw, 40, { size: 15 });
+    UI.button(c, 'hand', 'Layout: ' + (s.hand === 'left' ? 'left-handed' : 'right-handed'), x, 214, w, 40, { size: 15 });
+    UI.button(c, 'fit', 'Screen: ' + (s.fit === 'fill' ? 'Fill (zoomed, follows you)' : 'Fit (whole room)'), x, 262, w, 40, { size: 15 });
+    UI.button(c, 'auto', 'Auto-aim: ' + (s.auto ? 'on' : 'off'), x, 310, hw, 40, { size: 15 }); UI.button(c, 'vib', 'Vibration: ' + (s.vib ? 'on' : 'off'), x + hw + 12, 310, hw, 40, { size: 15 });
+    UI.button(c, 'full', T.standalone() ? 'Full screen (installed)' : 'Full screen', x, 358, hw, 40, { size: 15, disabled: !T.canFullscreen() }); UI.button(c, 'install', 'Install app', x + hw + 12, 358, hw, 40, { size: 15, color: COL.green, disabled: !T.canInstall() });
+    K.wrap(c, T.platformTip(), x + 4, 430, w - 8, 21, 14, COL.mute);
+    K.text(c, 'The controls are previewed here so you can see what each change does.', C.W / 2, 548, K.SZ.tiny, COL.dim, 'center');
+    K.back(c, 'back', 'Back');
+  }
 })(typeof globalThis !== 'undefined' ? globalThis : this);

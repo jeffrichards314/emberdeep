@@ -3535,10 +3535,10 @@ module.exports = function (ctx) {
       { const g = megaDone('V28RT', 5); const cr = R.cross(g); const ex = R.exitsFor(g, 5); const o = V28.overview(g); ok(o.doors.every(d => d.name && d.kind), 'doors seen carry a name (or ???) and a kind'); ok(o.doors.length <= ex.length - 1, 'and only doors that are visible (' + o.doors.length + ' of ' + (ex.length - 1) + ' offered)');
         const wasN = Object.keys(R.meta().discovered).length; cr.log.push({ T: 1, from: 'deep', to: 'crypts', gate: null }); const o2 = V28.overview(g); ok(o2.lands.length === o.lands.length + 1 && /Crypts/.test(o2.lands[o2.lands.length - 1]), 'lands visited follow the roads taken'); cr.log.pop(); }
       // the Sigils tab: thirteen cards, none off the screen, none on top of another
-      { const g = newGame(); g.scene = 'routes'; const rects = [], orig = ED.ui.panel; ED.ui.panel = function (c, x, y, w, h) { rects.push([x, y, w, h]); return orig.apply(this, arguments); };
-        try { ED.sceneImpl.routes.update(g, 'tab:sigils', ED.input); withSigils(ids, () => { g.render(); }); } catch (e) { ok(false, 'sigils tab: ' + e); } finally { ED.ui.panel = orig; ED.sceneImpl.routes.update(g, 'tab:worlds', ED.input); }
-        const cards = rects.filter(r => r[3] > 150 && r[3] < 200 && r[2] < 200); ok(cards.length === (P.on('v25') ? 13 : 12), 'thirteen cards are drawn (twelve without the Obsidian sigil) (' + cards.length + ')'); ok(cards.every(r => r[0] >= 0 && r[0] + r[2] <= C.W && r[1] >= 0 && r[1] + r[3] <= C.H), 'all inside the screen');
-        let overlap = 0; for (let i = 0; i < cards.length; i++) for (let j = i + 1; j < cards.length; j++) { const a = cards[i], b = cards[j]; if (a[0] < b[0] + b[2] - 1 && b[0] < a[0] + a[2] - 1 && a[1] < b[1] + b[3] - 1 && b[1] < a[1] + a[3] - 1) overlap++; } ok(overlap === 0, 'and none on top of another'); }
+      { const g = newGame(); g.scene = 'routes'; const rects = [], orig = ED.ui.panel, KT = ED.skin.kit, origG = KT && KT.glass; let pgNow = 0; const rec = (x, y, w, h) => { const r = [x, y, w, h]; r.pg = pgNow; rects.push(r); }; ED.ui.panel = function (c, x, y, w, h) { rec(x, y, w, h); return orig.apply(this, arguments); }; if (KT) KT.glass = function (c, x, y, w, h) { rec(x, y, w, h); return origG.apply(this, arguments); };
+        try { ED.sceneImpl.routes.update(g, 'tab:sigils', ED.input); withSigils(ids, () => { g.render(); if (ED.skin.on() && ED.ui.btns.some(b => b.id === 'rp:next' && !b.disabled)) { pgNow = 1; ED.sceneImpl.routes.update(g, 'rp:next', ED.input); g.render(); } }); } catch (e) { ok(false, 'sigils tab: ' + e); } finally { ED.ui.panel = orig; if (KT) KT.glass = origG; ED.sceneImpl.routes.update(g, 'tab:worlds', ED.input); }
+        const cards = rects.filter(r => r[3] > 130 && r[3] < 200 && r[2] < 230); ok(cards.length === (P.on('v25') ? 13 : 12), 'thirteen cards are drawn (twelve without the Obsidian sigil) (' + cards.length + ')'); ok(cards.every(r => r[0] >= 0 && r[0] + r[2] <= C.W && r[1] >= 0 && r[1] + r[3] <= C.H), 'all inside the screen');
+        let overlap = 0; for (let i = 0; i < cards.length; i++) for (let j = i + 1; j < cards.length; j++) { const a = cards[i], b = cards[j]; if (a.pg === b.pg && a[0] < b[0] + b[2] - 1 && b[0] < a[0] + a[2] - 1 && a[1] < b[1] + b[3] - 1 && b[1] < a[1] + a[3] - 1) overlap++; } ok(overlap === 0, 'and none on top of another'); }
     }
 
     section('P28c. v28 — the Sexton and the Stormcaller');
@@ -3700,6 +3700,18 @@ module.exports = function (ctx) {
     const activeKey = () => P.active().join();
     try {
       open();
+      if (ED.skin.on()) {
+        // the polished checklist: ten updates to a page, a strip of numbers for the presets (the keyboard walk below is the classic one)
+        const pagesN = Math.ceil(P.LIST.length / 10), seen = [], chips0 = ED.ui.btns.filter(x => /^upto:/.test(x.id) || x.id === 'allpacks').sort((p, q) => p.x - q.x);
+        ok(chips0.length === P.LIST.length + 1 && chips0[chips0.length - 1].id === 'allpacks', 'one chip per update plus EVERYTHING (' + chips0.length + ')');
+        let gap = true; for (let i = 1; i < chips0.length; i++) if (chips0[i].x < chips0[i - 1].x + chips0[i - 1].w + 1) gap = false; ok(gap, 'no two chips touch or overlap'); ok(chips0[0].x >= 8 && chips0[chips0.length - 1].x + chips0[chips0.length - 1].w <= 952, 'the row stays inside the screen');
+        for (let pg = 0; pg < pagesN; pg++) { ED.ui.vpage = pg; g.render(); const cs = ED.ui.btns.filter(x => /^pack:/.test(x.id)); ok(cs.length <= 10 && cs.every(b => b.h >= 40 && b.x >= 8 && b.x + b.w <= 952 && b.y + b.h <= 470), 'page ' + (pg + 1) + ': at most ten cells, each 40px tall or more and on screen'); for (const b of cs) seen.push(b.id); const all2 = ED.ui.btns.slice(); let clash = []; for (let i = 0; i < all2.length; i++) for (let j = i + 1; j < all2.length; j++) { const p = all2[i], q = all2[j]; if (p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h) clash.push(p.id + '/' + q.id); } ok(clash.length === 0, 'page ' + (pg + 1) + ': no two buttons overlap (' + (clash.slice(0, 3).join(', ') || 'none') + ')'); }
+        ok(seen.length === P.LIST.length && new Set(seen).size === P.LIST.length, 'every update has exactly one cell across the pages'); ED.ui.vpage = 0; g.render(); g.render();
+        const nxt = ED.ui.btns.find(x => x.id === 'vpg:next'); ok(!!nxt && !nxt.disabled && !!ED.ui.btns.find(x => x.id === 'vpg:prev'), 'Prev / Next page buttons exist');
+        const sel0 = ED.ui.btns.filter(b => /^pack:/.test(b.id) && b.nav); ok(ED.ui.navSel === sel0[0].id && sel0[0].id === 'pack:v2', 'the keys start on the first update you can switch, not on the preset row (' + ED.ui.navSel + ')');
+        ok(key('down') === sel0[1].id, 'Down walks to the next cell'); ok(key('right') !== null, 'Right moves'); ED.ui.navSel = 'pack:v2'; g.render();
+        const lastChip = chips0[chips0.length - 1]; for (const [x, y] of [[sel0[0].x + 20, sel0[0].y + 10], [chips0[3].x + 4, chips0[3].y + 4], [-50, -50]]) { M.x = x; M.y = y; try { g.render(); g.render(); ok(true, 'draws with the mouse at ' + Math.round(x) + ',' + Math.round(y)); } catch (e) { ok(false, 'versions screen with the mouse at ' + x + ': ' + e); } } away();
+      } else {
       const all = ED.ui.btns.slice(), chips = all.filter(x => /^upto:/.test(x.id) || x.id === 'allpacks').sort((p, q) => p.x - q.x), cells = all.filter(x => /^pack:/.test(x.id));
       ok(chips.length === P.LIST.length + 1 && chips[chips.length - 1].id === 'allpacks', 'one chip per update plus EVERYTHING (' + chips.length + ')');
       let gap = true; for (let i = 1; i < chips.length; i++) if (chips[i].x < chips[i - 1].x + chips[i - 1].w + 3) gap = false; ok(gap, 'no two chips touch or overlap'); ok(chips[0].x >= 8 && chips[chips.length - 1].x + chips[chips.length - 1].w <= 952, 'the row stays inside the screen'); ok(chips[chips.length - 1].w >= 90, 'EVERYTHING has room for its label');
@@ -3722,13 +3734,15 @@ module.exports = function (ctx) {
       for (let i = 0; i < 40; i++) key('right'); ok(ED.ui.navSel === 'allpacks', 'Right runs to EVERYTHING'); ok(key('right') === 'allpacks', '… and stops');
       const lastChip = chips[chips.length - 1], top2 = sel.filter(b => b.x < lastChip.x + lastChip.w / 2 && b.x + b.w > lastChip.x + lastChip.w / 2).sort((p, q) => p.y - q.y)[0]; ok(/^pack:/.test(key('down')) && ED.ui.navSel === top2.id, 'Down from the last chip enters the column under it (' + ED.ui.navSel + ')');
       ED.ui.navSel = sel[2].id; const side = sel.find(b => b.x !== sel[2].x && Math.abs(b.y - sel[2].y) < 2); ok(key('right') === side.id && key('left') === sel[2].id, 'Right and Left hop between the columns on the same row');
+      }
       // enter / click switch an update; a page pinned by ?packs= lets go of the pin on the first change
       P.force(null); ED.save.meta.packs = {}; open(); ED.ui.navSel = 'pack:v5'; g.render(); const was = P.on('v5'); key('confirm'); ok(P.on('v5') === !was, 'Enter switches the selected update'); key('confirm'); ok(P.on('v5') === was, '… and back');
       P.force(['v1']); open(); ok(P.forced() && P.active().join() === 'v1', 'a page pinned to v1 shows only v1'); act('pack:v5'); ok(!P.forced() && activeKey() === 'v1,v5', 'the first change drops the pin and keeps what the screen showed (' + activeKey() + ')');
       act('upto:v3'); ok(activeKey() === 'v1,v2,v3', 'a preset switches on everything up to it'); act('upto:v1'); ok(activeKey() === 'v1', 'the first chip is the untouched original'); act('allpacks'); ok(P.active().length === P.LIST.length, 'EVERYTHING switches on every update');
       act('pack:v1'); ok(P.active().length === P.LIST.length, 'the base cell cannot be switched off');
       // every state draws: the mouse over a cell, over a chip, over nothing with the keys on a chip
-      const c0 = cells.find(b => b.nav), ch0 = chips[3]; for (const [x, y] of [[c0.x + 20, c0.y + 10], [ch0.x + 4, ch0.y + 4], [-50, -50]]) { M.x = x; M.y = y; try { g.render(); g.render(); ok(true, 'draws with the mouse at ' + Math.round(x) + ',' + Math.round(y)); } catch (e) { ok(false, 'versions screen with the mouse at ' + x + ',' + y + ': ' + e); } }
+      open(); const cells2 = ED.ui.btns.filter(x => /^pack:/.test(x.id)), chips2 = ED.ui.btns.filter(x => /^upto:/.test(x.id) || x.id === 'allpacks').sort((p, q) => p.x - q.x);
+      const c0 = cells2.find(b => b.nav), ch0 = chips2[3]; for (const [x, y] of [[c0.x + 20, c0.y + 10], [ch0.x + 4, ch0.y + 4], [-50, -50]]) { M.x = x; M.y = y; try { g.render(); g.render(); ok(true, 'draws with the mouse at ' + Math.round(x) + ',' + Math.round(y)); } catch (e) { ok(false, 'versions screen with the mouse at ' + x + ',' + y + ': ' + e); } }
       P.force(['v1']); away(); try { g.render(); ok(true, 'the pinned notice draws'); } catch (e) { ok(false, 'pinned: ' + e); }
     } finally {
       P.force(null); ED.save.meta.packs = JSON.parse(keepSaved); if (keepForced) P.force(keepActive); ED.save.save(); IN.sim = keepSim; away(); ED.menus.go(g, 'title');

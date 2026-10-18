@@ -186,4 +186,51 @@
     },
     update(g, a, inp) { if (a === 'back' || inp.consume('back')) ED.menus.go(g, 'title'); },
   };
+  // ------------------------------------------------------------------ polished layouts (v23 POLISH): the same ids and update() as above, a calmer page; drawn instead of the classic ones while ED.skin.on()
+  const SK = ED.skin.screens = ED.skin.screens || {};
+  SK.hearth = function (g, c) {
+    const K = ED.skin.kit, COL = K.COL, u = UI(), m = meta();
+    K.head(c, 'THE HEARTH', { y: 50, color: COL.ember, rule: 260, sub: 'Spend embers on permanent upgrades. Every run earns more.' });
+    K.chip(c, 912, 22, '✦ ' + m.embers + ' embers', COL.ember, { align: 'right', size: 17, h: 34 });
+    UPG.forEach((up, i) => {
+      const x = 48 + (i < 5 ? 0 : 440), y = 126 + (i % 5) * 96, l = m.hearth[up.id] || 0, maxed = l >= up.max, cst = cost(up, l), ok = !maxed && m.embers >= cst;
+      u.button(c, 'buy:' + up.id, '', x, y, 424, 86, { color: COL.ember, disabled: !ok });
+      u.text(c, K.fit(c, up.name, 18, 270, true), x + 20, y + 30, 18, maxed ? COL.green : ok ? '#ffffff' : '#8a8aa2', 'left');
+      if (maxed) K.chip(c, x + 408, y + 12, 'MAX', COL.green, { align: 'right' }); else K.chip(c, x + 408, y + 12, '✦ ' + cst, ok ? COL.ember : COL.dim, { align: 'right', solid: ok });
+      for (let k = 0; k < up.max; k++) { K.rr(c, x + 20 + k * 17, y + 42, 13, 10, 3); c.fillStyle = k < l ? COL.ember : 'rgba(255,255,255,0.12)'; c.fill(); }
+      const now = l ? up.desc(l) : '', nxt = maxed ? '' : up.desc(l + 1);
+      let line = maxed ? now : l ? now + '  →  ' + nxt : 'next: ' + nxt; c.font = '14px ' + K.FONT; if (c.measureText(line).width > 386) line = maxed ? now : 'next: ' + nxt;
+      K.text(c, K.fit(c, line, 14, 386, false), x + 20, y + 74, 14, maxed ? '#9ad8a8' : COL.text);
+    });
+    K.back(c, 'back', 'Back');
+  };
+  SK.records = function (g, c) {
+    const K = ED.skin.kit, COL = K.COL, u = UI(), m = meta(), cols = [['#', 52], ['EDITION', 90], ['CLASS', 214], ['HEAT', 352], ['FLOOR', 424], ['SCORE', 504], ['EMBERS', 618], ['RESULT', 714]];
+    K.head(c, 'RUN RECORDS', { y: 50, color: '#9ad0ff', rule: 260, sub: 'Your last 20 runs — compare editions, classes and Heat.' });
+    cols.forEach(cl => u.text(c, cl[0], cl[1], 142, 13, COL.mute, 'left', true)); K.rule(c, 48, 152, 864);
+    if (!m.history.length) K.text(c, 'No runs yet. Go make some history.', C.W / 2, 330, 20, COL.dim, 'center');
+    m.history.forEach((h, i) => {
+      const y = 178 + i * 22, cl = I.CLASSES[h.cls] || { name: h.cls, color: '#fff' };
+      if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.035)'; c.fillRect(44, y - 16, 872, 22); }
+      K.text(c, String(i + 1), 52, y, 14, COL.dim); K.text(c, K.fit(c, h.packs || 'v1', 14, 116, false), 90, y, 14, COL.cyan);
+      u.text(c, K.fit(c, cl.name + (h.daily ? ' ☼' : ''), 14, 130, true), 214, y, 14, cl.color, 'left'); K.text(c, h.heat ? String(h.heat) : '—', 352, y, 14, h.heat ? '#ff8a5a' : COL.dim);
+      u.text(c, String(h.floor), 424, y, 14, COL.gold, 'left'); K.text(c, String(h.score), 504, y, 14, COL.ink); K.text(c, '+' + (h.embers || 0), 618, y, 14, COL.ember);
+      K.text(c, K.fit(c, h.victory ? 'VICTORY' : 'slain by ' + String(h.killedBy || '?'), 14, 196, false), 714, y, 14, h.victory ? COL.green : '#d0a8a8');
+    });
+    K.back(c, 'back', 'Back');
+  };
+  SK.heat = function (g, c) {
+    const K = ED.skin.kit, COL = K.COL, u = UI(), m = meta(), h = heatOf(m.heat);
+    K.head(c, 'PACTS OF HEAT', { y: 50, color: COL.ember, rule: 260, sub: 'Each pact adds Heat; Heat raises your score and the embers you earn.' });
+    PACTS.forEach((p, i) => {
+      const x = 48 + (i % 2) * 440, y = 118 + Math.floor(i / 2) * 64, on = m.heat.includes(p.id);
+      u.button(c, 'pact:' + p.id, '', x, y, 424, 56, { color: COL.ember, selected: false, ghost: !on });
+      K.rr(c, x + 16, y + 17, 22, 22, 6); c.fillStyle = on ? COL.ember : 'rgba(255,255,255,0.1)'; c.fill(); if (on) { c.strokeStyle = '#1a1020'; c.lineWidth = 3; c.beginPath(); c.moveTo(x + 21, y + 28); c.lineTo(x + 26, y + 33); c.lineTo(x + 34, y + 22); c.stroke(); }
+      u.text(c, K.fit(c, p.name, 16, 250, true), x + 52, y + 24, 16, on ? '#ffe0b0' : '#e8e8f8', 'left'); K.chip(c, x + 408, y + 7, '+' + p.heat + ' Heat', '#ff8a5a', { align: 'right', size: 13, h: 22 });
+      K.text(c, K.fit(c, p.desc, 13, 354, false), x + 52, y + 46, 13, on ? '#ecd8bc' : COL.mute);
+    });
+    const by = 574; K.glass(c, 48, by, 424, 52, { a: 0.8, accent: COL.ember, shadow: false });
+    K.segs(c, 260, by + 32, [['HEAT ' + h, COL.ember, true], ['score x' + H.scoreMul(h).toFixed(1), COL.text, false], ['embers x' + H.emberMul(h).toFixed(2), COL.text, false]], 15);
+    u.button(c, 'clear', 'Clear all', 488, by, 150, 52, { size: 15, color: COL.red }); u.button(c, 'back', 'Done', 652, by, 260, 52, { size: 18, color: COL.green, primary: true });
+  };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -152,14 +152,15 @@
         c.fillStyle = '#10101c'; c.font = 'bold 22px monospace'; c.textAlign = 'center'; c.fillText(t.on ? '✦' : '▲', x + w / 2, y + 71);
         UI.text(c, t.name, x + w / 2, y + 122, 17, '#ffffff', 'center');
         UI.wrap(c, t.desc, x + 22, y + 160, w - 44, 18, 13, '#d8d8ee');
-        UI.text(c, t.on ? 'ACTS (a trigger)' : 'STAT', x + w / 2, y + h - 20, 10, t.on ? '#ffd24a' : '#8aa0c0', 'center', false);
+        UI.text(c, t.on ? 'ACTS (a trigger)' : 'STAT', x + w / 2, y + h - 20, 13, t.on ? '#ffd24a' : '#8aa0c0', 'center', false);
       });
-      const have = owned(p); if (have.length) UI.text(c, 'Already learned: ' + have.map(t => t.name).join(' · '), C.W / 2, 482, 11, '#8a9ab8', 'center', false);
-      UI.text(c, 'Click a card to learn it. You must choose one.', C.W / 2, 504, 11, '#7a8aa8', 'center', false);
+      const have = owned(p); if (have.length) UI.text(c, 'Already learned: ' + have.map(t => t.name).join(' · '), C.W / 2, 482, 13, '#9aaac8', 'center', false);
+      UI.text(c, 'Click a card to learn it. You must choose one.', C.W / 2, 508, 13, '#8a9ab8', 'center', false);
     },
     update(g, m, act) { if (act && act.indexOf('pick:') === 0) { const t = m.offers[+act.slice(5)]; if (t) take(g, t); } },
   };
   ED.hook('pauseUI', V, (g, c, o) => {
+    if (ED.skin.on() && ED.skin.screens && ED.skin.screens.paused) return;
     const have = owned(g.player); if (!have.length) return; const UI = ED.ui, x = o.x, y = o.y;
     UI.text(c, 'TALENTS', x + 14, y + 206, 11, '#8ae0ff'); UI.wrap(c, have.map(t => t.name).join(' · '), x + 76, y + 206, 430, 14, 11, '#c8e8f8');
   });

@@ -309,6 +309,7 @@ node --expose-gc test/run-tests.js            # full suite for the currently sav
 node --expose-gc test/run-tests.js --quick --packs=none|all|v2,v4   # smaller counts; pick the edition
 node test/parity.js [N]                       # is "all updates off" identical to the frozen v1 in versions/v1 ?
 node test/touch.js                            # just the touch-control + service-worker tests (a few seconds; also part of every run-tests.js run)
+node test/ui-lint.js                          # the polished menus: nothing off screen, overlapping, tiny or unreachable (also part of run-tests.js while POLISH is on)
 ```
 
 The suite loads the game in Node (script order from `index.html`, fake canvas, seeded `Math.random`, so failures reproduce) and checks, for the active edition:
@@ -338,6 +339,7 @@ rendering are separate: `generator`/`keys`/`rooms` build data, `entities`/`comba
 | `save.js` | persistent meta: unlocks, best floors, per-seed bests, settings |
 | `difficulty.js` | **the** scaling table + wave composer, room/rarity weights, boss tiers |
 | `input.js` · `audio.js` | keyboard/mouse/gamepad/touch → actions · WebAudio SFX + reactive generative music |
+| `art_kit.js` · `art_screens.js` | the polished menu **kit** (glass panels, buttons, headers, hook capture) and the polished screens built on it (title, hero select, options, pause, end of run, collection, versions, controls, keys, guide; the updates' own screens live in their pack files); `test/ui-lint.js` checks every screen for off-screen / overlapping / tiny text and unreachable buttons |
 | `touch.js` | **touch controls**: DOM overlay (stick, buttons), screen layout maths, the zoom-to-fill picture and its camera, tap snapping, auto-aim, the *Touch controls* options scene; feeds `ED.input.touchState` (inert without a touch screen) |
 | `sw.js` · `manifest.webmanifest` · `icons/` · `tools/make-icons.js` | installable app: offline service worker (network first), manifest, icons drawn by a script |
 | `items.js` | weapons, affixes, armor, actives, relics, synergies, classes, stat aggregation |

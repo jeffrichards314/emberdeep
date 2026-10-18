@@ -466,4 +466,48 @@
       if (a && a.indexOf('sel:') === 0) { sel = +a.slice(4); g.sfx('ui'); }
     },
   };
+
+  // polished layout (v23 POLISH): the same ids and update() as the classic scene above
+  (ED.skin.screens = ED.skin.screens || {}).hunt = function (g, c) {
+    const K = ED.skin.kit, COL = K.COL, h = meta(), u = UI(); u.navMode = 'spatial';
+    K.head(c, 'THE HUNT', { y: 50, color: '#ff6a8a', rule: 240, sub: 'Foes that beat you come back with a name. Slay them for spoils — or they grow stronger.' });
+    if (!h.roster.length) {
+      K.text(c, 'No one hunts you yet.', C.W / 2, 290, 24, COL.mute, 'center'); K.wrap(c, 'Die to an elite or a boss, or let a wounded elite slip away, and it will remember you.', 200, 326, 560, 22, 16, COL.dim);
+    }
+    if (!sel || !h.roster.find(n => n.id === sel)) sel = h.roster.length ? h.roster[0].id : null;
+    const at = Math.max(0, h.roster.findIndex(n => n.id === sel)), first = Math.max(0, Math.min(at - 6, h.roster.length - 7));
+    h.roster.slice(first, first + 7).forEach((nem, i) => {
+      const y = 118 + i * 64, on = nem.id === sel, col = RANK_COL[nem.rank - 1], def = ED.enemyTypes[nem.type] || { shape: 'circle', color: '#d9534f' };
+      u.button(c, 'sel:' + nem.id, '', 48, y, 372, 58, { color: col, selected: on, ghost: !on });
+      c.fillStyle = def.color; c.strokeStyle = col; c.lineWidth = 2; ED.render.shape(c, def.shape, 80, y + 29, 16, 0, u.t); c.fill(); c.stroke();
+      u.text(c, K.fit(c, nem.name + ' ' + nem.epi, 15, 210, true), 108, y + 24, 15, on ? '#ffffff' : '#e4e4f4', 'left'); K.text(c, K.fit(c, 'Rank ' + nem.rank + ' ' + RANKS[nem.rank - 1] + ' · beat you ' + nem.kills + 'x' + (nem.escapes ? ' · got away ' + nem.escapes + 'x' : '') + ' · F' + nem.floor, 13, 250, false), 108, y + 45, 13, COL.mute);
+      let gx = 404; for (const t of traitsOf(nem).reverse()) { const known = nem.known.indexOf(t.id) >= 0; u.text(c, known ? t.glyph : '?', gx, y + 24, 16, known ? t.color : '#5a5a78', 'right'); gx -= 20; }
+    });
+    const nem = h.roster.find(n => n.id === sel), px = 440, py = 112, pw = 472, ph = 440;
+    K.glass(c, px, py, pw, ph, { accent: nem ? RANK_COL[nem.rank - 1] : null, a: 0.82 });
+    if (nem) {
+      const col = RANK_COL[nem.rank - 1], def = ED.enemyTypes[nem.type] || { shape: 'circle', color: '#d9534f', name: '?' };
+      c.fillStyle = def.color; c.strokeStyle = col; c.lineWidth = 4; ED.render.shape(c, def.shape, px + 54, py + 56, 30, 0, u.t); c.fill(); c.stroke();
+      u.shadow(c, K.fit(c, nem.name, 24, 340, true), px + 100, py + 44, 24, col, 'left'); K.text(c, nem.epi, px + 100, py + 66, 15, '#e0d0f0');
+      for (let i = 0; i < 5; i++) { c.fillStyle = i < nem.rank ? col : 'rgba(255,255,255,0.12)'; c.beginPath(); c.moveTo(px + 108 + i * 18, py + 76); c.lineTo(px + 115 + i * 18, py + 84); c.lineTo(px + 108 + i * 18, py + 92); c.lineTo(px + 101 + i * 18, py + 84); c.closePath(); c.fill(); }
+      u.text(c, 'RANK ' + nem.rank + ' · ' + RANKS[nem.rank - 1].toUpperCase(), px + 204, py + 89, 13, col, 'left');
+      let y = py + 124; const w = pw - 48;
+      y = K.wrap(c, 'A ' + (def.name || nem.type) + (nem.boss ? ' sworn to ' + nem.boss : '') + ' · ' + ({ elite: 'rose from an elite that killed you', herald: 'a herald of a boss that killed you', foe: 'a foe that killed you and was promoted', survivor: 'a survivor you let get away' }[nem.origin] || ''), px + 24, y, w, 18, 13, COL.mute);
+      y = K.wrap(c, 'Last beat a ' + clsName(nem.cls) + ' on floor ' + nem.floor + (nem.wpn ? ' (' + nem.wpn + ')' : '') + ' · hunts from floor ' + Math.max(2, nem.from || 2), px + 24, y + 2, w, 18, 13, COL.mute) + 10;
+      const row = (t) => {
+        const known = nem.known.indexOf(t.id) >= 0, tip = known && t.kind === 'W', lines = known ? K.lines(c, t.desc, w - 52, 13) + (tip ? K.lines(c, 'Tip: ' + t.hint, w - 52, 13) : 0) : 0, hh = 30 + lines * 17;
+        c.fillStyle = known ? U.rgba(t.color, 0.14) : 'rgba(255,255,255,0.04)'; K.rr(c, px + 20, y - 6, w + 8, hh, 6); c.fill();
+        u.text(c, known ? t.glyph : '?', px + 40, y + 20, 18, known ? t.color : '#5a5a78', 'center');
+        u.text(c, K.fit(c, known ? t.name : 'Unknown ' + (t.kind === 'S' ? 'strength' : 'weakness') + ' — fight it to find out', 14, w - 56, true), px + 64, y + 16, 14, known ? '#fff' : '#8a8aa4', 'left', known);
+        if (known) { const y2 = K.wrap(c, t.desc, px + 64, y + 34, w - 52, 17, 13, '#d0d0e6'); if (tip) K.wrap(c, 'Tip: ' + t.hint, px + 64, y2 + 1, w - 52, 17, 13, '#9ad0ff'); }
+        y += hh + 6;
+      };
+      K.label(c, 'STRENGTHS', px + 24, y + 4, w, '#ff8a6a'); y += 24; for (const id of nem.str) row(BY_ID[id]); if (!nem.str.length) { K.text(c, 'none yet', px + 64, y + 12, 14, COL.dim); y += 28; }
+      K.label(c, 'WEAKNESS', px + 24, y + 6, w, COL.green); y += 26; row(BY_ID[nem.weak]);
+    }
+    // the fallen
+    K.label(c, 'THE FALLEN' + (h.slain ? '   ' + h.slain + ' slain in all' : ''), 48, 584, 864, COL.mute);
+    if (!h.fallen.length) K.text(c, 'None yet.', 48, 608, 13, COL.dim); else h.fallen.slice(0, 2).forEach((f, i) => K.text(c, K.fit(c, '☠ ' + f.name + ' ' + f.epi + '  ·  rank ' + f.rank + '  ·  slain on floor ' + f.floor + ' as a ' + clsName(f.cls), 13, 840, false), 48, 606 + i * 18, 13, COL.mute));
+    K.back(c, 'back', 'Back');
+  };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

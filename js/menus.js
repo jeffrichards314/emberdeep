@@ -69,6 +69,7 @@
         if (a === 'back' || inp.consume('back')) { M.go(g, 'title'); return; }
         // a page opened with ?packs=... pins the switches; the first change made here replaces that pin with the choice you see (saved like any other)
         const unpin = () => { if (ED.packs.forced()) { const shown = ED.packs.active(); ED.packs.force(null); ED.packs.use(shown); } };
+        if (a === 'vpg:prev') UI.vpage = Math.max(0, (UI.vpage | 0) - 1); else if (a === 'vpg:next') UI.vpage = (UI.vpage | 0) + 1;                    // (the polished checklist has pages; clamped when drawn)
         if (a && a.indexOf('pack:') === 0) { const id = a.slice(5); if (ED.packs.BY_ID[id] && !ED.packs.BY_ID[id].base) { unpin(); ED.packs.toggle(id); g.sfx(ED.packs.on(id) ? 'unlock' : 'uiback'); } else g.sfx('deny'); }
         else if (a && a.indexOf('upto:') === 0) { unpin(); ED.packs.upTo(a.slice(5)); g.sfx('unlock'); }
         else if (a === 'allpacks') { unpin(); ED.packs.use('all'); g.sfx('unlock'); }
@@ -117,6 +118,7 @@
         UI.navMode = 'vert';
       } else if (sc === 'paused') {
         UI.navMode = 'vert'; M.navigate(g); const a = M.pollAction(g);
+        if (a && a.indexOf('ptab:') === 0) { UI.ptab = a.slice(5); g.sfx('ui'); }
         if (inp.consume('pause') || inp.consume('back') || a === 'resume') { g.scene = 'play'; UI.navSel = null; g.sfx('uiback'); return; }
         if (a === 'options') { UI.back = 'paused'; g.scene = 'settings'; UI.navSel = null; }
         else if (a === 'abandon') { if (UI.confirm === 'abandon') { UI.confirm = null; g.finishRun(false); } else UI.confirm = 'abandon'; }
@@ -193,7 +195,8 @@
     drawMenu(g, c) {
       UI.beginFrame();
       M.drawBackdrop(g, c);
-      switch (g.scene) {
+      const sk = ED.skin.on() && ED.skin.screens && ED.skin.screens[g.scene];        // the polished look draws its own screens (art_screens.js); the classic ones below stay as they were
+      if (sk) sk(g, c); else switch (g.scene) {
         case 'title': M.drawTitle(g, c); break;
         case 'select': M.drawSelect(g, c); break;
         case 'collection': M.drawCollection(g, c); break;
@@ -298,12 +301,17 @@
       if (k === 'victory') return 'Win a run (cash out)';
       return u;
     },
+    /** the rows of the Controls screen (touch wording while the touch controls show) */
+    helpRows() {
+      const I = ED.input, def = I.isDefault();
+      return ED.touch && ED.touch.active() ? [['Move', 'Drag the left side (thumb stick)'], ['Attack', 'Hold ATTACK, drag to aim'], ['Dash (i-frames)', 'DASH button'], ['Interact / Buy / Take', 'USE button (glows near things)'], ['Active ability', 'Lightning button'], ['Place bomb', 'Bomb button'], ['Pause', 'Pause button (top corner)'], ['Big map', 'Hold the MAP button'], ['Back (menus)', 'X button, top left']] : [['Move', def ? 'WASD / Arrow keys' : ['up', 'left', 'down', 'right'].map(a => I.label(a)).join('  ·  ')], ['Attack', def ? 'Space / J / Left click (mouse aims)' : I.label('attack') + ' / Left click (mouse aims)'], ['Dash (i-frames)', def ? 'K / Shift' : I.label('dash')], ['Interact / Buy / Take', def ? 'E' : I.label('interact')], ['Active ability', def ? 'Q' : I.label('active')], ['Place bomb', def ? 'B' : I.label('bomb')], ['Pause', 'Esc / P'], ['Mute / Fullscreen', 'M / F'], ['Debug mode', '` (backtick)']];
+    },
+    HELP_TIPS: ['Doors lock while enemies live. Telegraphed attacks glow red: dash THROUGH them or away.', 'The Boss Key is carried by a mini boss. Find the right key for each locked door (colored by type).', 'Bomb cracked walls (B). Cursed, devil and shrine rooms show costs up front — mystery chests do not.', 'Every 5th floor is a MEGA BOSS. A rest room appears before it.'],
     drawHelp(g, c) {
       UI.shadow(c, 'CONTROLS', C.W / 2, 70, 34, '#ffd24a', 'center');
-      const I = ED.input, def = I.isDefault();
-      const rows = ED.touch && ED.touch.active() ? [['Move', 'Drag the left side (thumb stick)'], ['Attack', 'Hold ATTACK, drag to aim'], ['Dash (i-frames)', 'DASH button'], ['Interact / Buy / Take', 'USE button (glows near things)'], ['Active ability', 'Lightning button'], ['Place bomb', 'Bomb button'], ['Pause', 'Pause button (top corner)'], ['Big map', 'Hold the MAP button'], ['Back (menus)', 'X button, top left']] : [['Move', def ? 'WASD / Arrow keys' : ['up', 'left', 'down', 'right'].map(a => I.label(a)).join('  ·  ')], ['Attack', def ? 'Space / J / Left click (mouse aims)' : I.label('attack') + ' / Left click (mouse aims)'], ['Dash (i-frames)', def ? 'K / Shift' : I.label('dash')], ['Interact / Buy / Take', def ? 'E' : I.label('interact')], ['Active ability', def ? 'Q' : I.label('active')], ['Place bomb', def ? 'B' : I.label('bomb')], ['Pause', 'Esc / P'], ['Mute / Fullscreen', 'M / F'], ['Debug mode', '` (backtick)']];
+      const rows = M.helpRows();
       rows.forEach((r, i) => { UI.text(c, r[0], 230, 130 + i * 30, 17, '#cfd0ee'); UI.text(c, r[1], 520, 130 + i * 30, 17, '#ffd24a'); });
-      const tips = ['Doors lock while enemies live. Telegraphed attacks glow red: dash THROUGH them or away.', 'The Boss Key is carried by a mini boss. Find the right key for each locked door (colored by type).', 'Bomb cracked walls (B). Cursed, devil and shrine rooms show costs up front — mystery chests do not.', 'Every 5th floor is a MEGA BOSS. A rest room appears before it.'];
+      const tips = M.HELP_TIPS;
       tips.forEach((t2, i) => UI.text(c, '• ' + t2, 70, 428 + i * 24, 13, '#a8a8c8', 'left', false));
       UI.button(c, 'back', 'Back', C.W / 2 - 220, 560, 200, 40, {}); UI.button(c, 'guide', 'Guide  ▸', C.W / 2 + 20, 560, 200, 40, { color: '#7fd8ff' });
     },
@@ -351,7 +359,7 @@
       UI.text(c, ED.packs.forced() ? 'This page was opened with ?packs=...  The switches show that choice; the first change you make here replaces it (and is saved).' : 'Each update is independent: switch any on or off for your NEXT run (v1 alone is the untouched original).', C.W / 2, 64, 12, ED.packs.forced() ? '#ffd24a' : '#a8a8c8', 'center', false);
       // the checklist: one cell per update, filled column by column (at most 10 to a column, so 20-30 updates stay readable); the cells come first so the arrow keys start on them
       const perCol = 10, cols = Math.ceil(L.length / perCol), rows = Math.ceil(L.length / cols), gap = 14, cw = Math.floor((W - (cols - 1) * gap) / cols), y0 = 110, pitch = Math.min(46, Math.floor(396 / rows)), ch = pitch - 4;
-      const NAMES = { classes: 'classes', weapons: 'weapons', actives: 'actives', relics: 'relics', armor: 'armor', affixes: 'affixes', enemies: 'enemies', mods: 'elite mods', minis: 'mini bosses', bosses: 'bosses', megas: 'mega bosses', rooms: 'room types', worlds: 'worlds', events: 'events', familiars: 'familiars', heat: 'heat rules', shrines: 'shrine altars' };
+      const NAMES = M.COUNT_NAMES;
       let over = null, picked = null;
       L.forEach((p, i) => {
         const x = x0 + Math.floor(i / rows) * (cw + gap), y = y0 + (i % rows) * pitch, on = ED.packs.on(p.id);
@@ -396,14 +404,11 @@
       UI.button(c, 'back', 'Back', C.W / 2 - 100, 596, 200, 34, { size: 14 });
     },
 
+    COUNT_NAMES: { classes: 'classes', weapons: 'weapons', actives: 'actives', relics: 'relics', armor: 'armor', affixes: 'affixes', enemies: 'enemies', mods: 'elite mods', minis: 'mini bosses', bosses: 'bosses', megas: 'mega bosses', rooms: 'room types', worlds: 'worlds', events: 'events', familiars: 'familiars', heat: 'heat rules', shrines: 'shrine altars' },
     // ============================================================ collection
-    drawCollection(g, c) {
-      const meta = ED.save.meta, m = ED.input.mouse;
-      UI.shadow(c, 'COLLECTION', C.W / 2, 50, 32, '#ffd24a', 'center');
-      TABS.forEach((t2, i) => UI.button(c, 'tab:' + i, t2, 70 + i * 160, 68, 150, 32, { size: 14, selected: UI.tab === i, color: '#7fd8ff' }));
-      UI.button(c, 'back', 'Back', C.W - 160, 600, 120, 30, { size: 13 });
-      let cells = [];
-      const tab = UI.tab;
+    /** the cells of a Collection tab (classes, relics, actives, bestiary, bosses): {name, color, unlocked, desc, draw(x, y), sub, rar}; shared by the classic and the polished screens */
+    collectionCells(c, tab) {
+      const meta = ED.save.meta; const cells = [];
       if (tab === 0) for (const cls of ED.items.classList()) { const un = ED.save.isClassUnlocked(cls.id); cells.push({ name: un ? cls.name : '???', color: un ? cls.color : '#555', unlocked: un, desc: un ? cls.desc : M.unlockText(cls.unlock), draw: (x, y) => { c.fillStyle = un ? cls.color : '#444'; c.beginPath(); c.arc(x, y, 12, 0, TAU); c.fill(); }, sub: un ? ED.items.WEAPONS[cls.weapon].name : 'LOCKED' }); }
       else if (tab === 1) for (const r of ED.packs.values(ED.items.RELICS).filter(x => !x.hidden)) { const un = ED.items.isUnlocked(r); const seen = !!meta.seen.items[r.id]; cells.push({ name: un ? r.name : '???', color: un ? ED.items.RARITY[r.rarity].color : '#555', unlocked: un, desc: un ? r.desc : 'Locked. ' + M.unlockText(r.unlock), draw: (x, y) => { if (un) ED.render.itemGlyph(c, { cat: 'relic', id: r.id }, x, y, 11, 0); else ED.icons.draw(c, 'lock', x, y, 9, '#777'); }, sub: un ? (seen ? 'found' : 'unfound') : 'LOCKED', rar: r.rarity }); }
       else if (tab === 2) for (const a of ED.packs.values(ED.items.ACTIVES)) { const un = ED.items.isUnlocked(a); cells.push({ name: un ? a.name : '???', color: un ? a.color : '#555', unlocked: un, desc: un ? a.desc : 'Locked. ' + M.unlockText(a.unlock), draw: (x, y) => { if (un) ED.render.itemGlyph(c, { cat: 'active', id: a.id, rarity: 'common' }, x, y, 11, 0); else ED.icons.draw(c, 'lock', x, y, 9, '#777'); }, sub: un ? 'active' : 'LOCKED' }); }
@@ -412,6 +417,14 @@
         for (const id of ED.minibosses.ids) { const d = ED.minibosses.def(id), un = !!meta.unlocked.minis[id]; cells.push({ name: un ? d.name : '???', color: un ? d.color : '#555', unlocked: un, desc: un ? d.title + ' — mini boss. Unlocked: ' + d.unlockText : 'Defeat it once to unlock: ' + d.unlockText, draw: (x, y) => { ED.icons.draw(c, un ? 'skull' : 'lock', x, y, 10, un ? d.color : '#777'); }, sub: 'mini' }); }
         for (const id of ED.bosses.allIds()) { const d = ED.bosses.def(id), un = !!meta.unlocked.bosses[id]; cells.push({ name: un ? d.name : '???', color: un ? d.color : '#555', unlocked: un, desc: un ? d.name + ', ' + d.title + (d.mega ? ' (MEGA BOSS). ' : '. ') + d.teaches : (d.mega ? 'MEGA BOSS. ' : 'Boss. ') + 'Defeat it to unlock its rewards.', draw: (x, y) => { ED.icons.draw(c, un ? 'bigskull' : 'lock', x, y, 11, un ? d.color : '#777'); }, sub: d.mega ? 'MEGA' : 'boss' }); }
       }
+      return cells;
+    },
+    drawCollection(g, c) {
+      const meta = ED.save.meta, m = ED.input.mouse;
+      UI.shadow(c, 'COLLECTION', C.W / 2, 50, 32, '#ffd24a', 'center');
+      TABS.forEach((t2, i) => UI.button(c, 'tab:' + i, t2, 70 + i * 160, 68, 150, 32, { size: 14, selected: UI.tab === i, color: '#7fd8ff' }));
+      UI.button(c, 'back', 'Back', C.W - 160, 600, 120, 30, { size: 13 });
+      let cells = M.collectionCells(c, UI.tab);
       // the grid adapts to how much there is to show (81+ relics with every update): more columns first, then tighter rows, so it never runs under the tooltip / footer
       let cols = 12, cs = 74, rh = 76; const y0 = 112, maxH = 412;
       while (Math.ceil(cells.length / cols) * rh > maxH) { if (cols < 16) { cols++; cs = Math.floor(888 / cols); } else if (rh > 56) rh -= 4; else break; }
@@ -436,6 +449,7 @@
 
     // ============================================================ pause + end
     drawPause(g, c) {
+      if (ED.skin.on() && ED.skin.screens && ED.skin.screens.paused) return ED.skin.screens.paused(g, c);
       c.fillStyle = 'rgba(0,0,0,0.72)'; c.fillRect(0, 0, C.W, C.H);
       UI.shadow(c, 'PAUSED', C.W / 2, 90, 44, '#ffd24a', 'center');
       UI.button(c, 'resume', 'Resume', 90, 130, 260, 44, { size: 18, color: '#6ee07a' });
@@ -465,6 +479,7 @@
       if (tip) UI.drawItemTip(g, c, { cat: 'relic', id: tip.id }, tip.rx + 17, tip.ry + 40, false);
     },
     drawEnd(g, c) {
+      if (ED.skin.on() && ED.skin.screens && ED.skin.screens.ended) return ED.skin.screens.ended(g, c);
       const v = g.scene === 'victory', r = g.run, p = g.player, t = g.deadT;
       const a = U.clamp(t / 40, 0, 1);
       c.fillStyle = 'rgba(' + (v ? '10,12,4' : '14,2,4') + ',' + 0.82 * a + ')'; c.fillRect(0, 0, C.W, C.H);

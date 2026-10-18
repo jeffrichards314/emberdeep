@@ -207,9 +207,9 @@
       if (m.stage === 'choose') {
         const many = ev.choices.length > 3;       // four choices must still leave room for the hint line below them
         ev.choices.forEach((ch, i) => { const dis = ch.can && !ch.can(g, m.st), by = y + (many ? 160 : 172) + i * (many ? 49 : 56); UI.button(c, 'ch:' + i, '', x + 40, by, w - 80, many ? 44 : 50, { color: ev.color, disabled: !!dis }); UI.text(c, ch.label, x + w / 2, by + (many ? 18 : 21), 14, dis ? '#6a6a80' : '#ffffff', 'center'); const sub = ch.sub ? ch.sub(g, m.st) : ''; if (sub) UI.text(c, sub, x + w / 2, by + (many ? 35 : 39), 11, dis ? '#5a5a70' : '#ffd8a0', 'center', false); });
-        UI.text(c, 'Esc to step away (the choice stays open)', C.W / 2, y + h - 12, 10, '#7a7a98', 'center', false);
+        UI.text(c, 'Esc to step away (the choice stays open)', C.W / 2, y + h - 12, 13, '#8a8aa8', 'center', false);
       } else UI.button(c, 'done', 'Continue', x + 230, y + h - 72, w - 460, 46, { size: 16, color: '#6ee07a' });
-      UI.text(c, 'Gold ' + g.player.gold + ' · HP ' + g.player.hp + '/' + g.player.maxHp, x + w - 16, y + 24, 11, '#9a9ab8', 'right', false);
+      UI.text(c, 'Gold ' + g.player.gold + ' · HP ' + g.player.hp + '/' + g.player.maxHp, x + w - 16, y + 24, 13, '#a8a8c4', 'right', false);
     },
     update(g, m, act, inp) {
       if (m.stage === 'choose') {

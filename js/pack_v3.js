@@ -386,7 +386,9 @@
   ED.hook('intro', V, (g, c) => {
     const wi = mine(g), UI = ED.ui; if (!wi) return;
     if (wi.first) UI.shadow(c, 'WORLD ' + wi.number, C.W / 2, 112, 16, wi.w.color, 'center');
-    UI.text(c, wi.w.rule, C.W / 2, g.floor.isMega ? 236 : 206, 12, wi.first ? '#e8e8f4' : '#8a8aa8', 'center', false);
+    if (ED.skin.on()) { const rule = wi.w.rule, cut = rule.length > 96 ? rule.lastIndexOf(' ', Math.floor(rule.length / 2) + 8) : -1, ry = g.floor.isMega ? 236 : 206;           // (polished: larger, and a long rule goes on two lines)
+      (cut > 0 ? [rule.slice(0, cut), rule.slice(cut + 1)] : [rule]).forEach((ln, i) => UI.text(c, ln, C.W / 2, ry + i * 19 - (cut > 0 ? 8 : 0), 14, wi.first ? '#e8e8f4' : '#9a9ab4', 'center', false)); }
+    else UI.text(c, wi.w.rule, C.W / 2, g.floor.isMega ? 236 : 206, 12, wi.first ? '#e8e8f4' : '#8a8aa8', 'center', false);
     if (wi.first) { const nf = wi.w.enemies.filter(id => ED.enemyTypes[id].minFloor <= g.floorNum + 5).map(id => ED.enemyTypes[id].name); if (nf.length) UI.text(c, 'New foes: ' + nf.join(', '), C.W / 2, 388, 14, '#ffd24a', 'center'); }
   });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -569,6 +569,8 @@ require('./pack-tests')({ ED, sandbox, ok, section, newGame, stepN, Bot, quick, 
 
 // ------------------------------------------------------------------ touch controls (core, every edition)
 await require('./touch-tests')({ ED, sandbox, ok, section, newGame, stepN, Bot, quick });
+// ------------------------------------------------------------------ the polished menus are tidy (only where the polished look is on)
+await require('./ui-lint')({ ED, sandbox, ok, section, newGame, stepN, Bot, quick });
 
 ok(scriptErrors === 0, 'no swallowed script errors during the whole run (' + scriptErrors + ')');
 // ------------------------------------------------------------------ summary

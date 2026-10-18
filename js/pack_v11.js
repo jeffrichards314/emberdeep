@@ -156,4 +156,19 @@
       if (a && a.indexOf('pick:') === 0 && ED.trials.set(a.slice(5))) g.sfx('ui');
     },
   };
+
+  // polished layout (v23 POLISH)
+  (ED.skin.screens = ED.skin.screens || {}).mode = function (g, c) {
+    const K = ED.skin.kit, COL = K.COL, u = UI(), T = meta(), cur = modeId();
+    K.head(c, 'CHOOSE A MODE', { y: 50, color: '#7fe0c0', rule: 260, sub: 'Applies to your next run. Class, seed, pacts and every update still apply.' });
+    MODES.filter(m => P.ok(m)).forEach((m, i) => {
+      const y = 124 + i * 114, on = cur === m.id, b = T.best[m.id];
+      u.button(c, 'pick:' + m.id, '', 48, y, 864, 104, { color: m.color, selected: false, ghost: !on });
+      c.fillStyle = on ? m.color : 'rgba(255,255,255,0.12)'; c.beginPath(); c.arc(92, y + 52, 15, 0, TAU); c.fill(); if (on) { c.fillStyle = '#14101e'; c.beginPath(); c.arc(92, y + 52, 6, 0, TAU); c.fill(); }
+      u.shadow(c, m.name, 134, y + 33, 24, on ? m.color : '#e8e8f8', 'left'); K.wrap(c, m.desc, 134, y + 57, 560, 18, 14, on ? '#ecf0f8' : COL.mute);
+      u.text(c, b ? 'Best: floor ' + b.floor : 'No run yet', 888, y + 42, 17, b ? m.color : COL.dim, 'right', true);
+      K.text(c, K.fit(c, (T.runs[m.id] || 0) + ' run' + ((T.runs[m.id] || 0) === 1 ? '' : 's') + (b ? '  ·  ' + b.edition : ''), 13, 220, false), 888, y + 66, 13, COL.dim, 'right');
+    });
+    u.button(c, 'back', 'Done', C.W / 2 - 130, 584, 260, 48, { size: 18, color: COL.green, primary: true });
+  };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -414,6 +414,7 @@
   let tab = 'worlds';
   const lands = () => W.ALL.filter(w => P.ok(w) && (!w.hidden || meta().discovered[w.id] || meta().seen[w.id]));
   const gateLine = (w) => { const s = gateOf(w), M = meta(); if (!s) return ''; if (M.learned[w.id]) return 'opened by: ' + KINDS[s.kind].name; if (M.rumours[w.id]) return rumourText(w); return ''; };
+  let rpage = 0;                                                                              // (the polished layout's page of lands / sigils)
   ED.sceneImpl.routes = {
     draw(g, c) {
       const u = ED.ui, M = meta(), m = ED.input.mouse, cards = [];
@@ -472,8 +473,53 @@
     },
     update(g, a, inp) {
       if (a === 'back' || inp.consume('back')) { ED.menus.go(g, 'title'); return; }
-      if (a && a.indexOf('tab:') === 0) { tab = a.slice(4); g.sfx('ui'); }
+      if (a && a.indexOf('tab:') === 0) { tab = a.slice(4); rpage = 0; g.sfx('ui'); }
+      else if (a === 'rp:prev' || a === 'rp:next') { rpage += a === 'rp:next' ? 1 : -1; g.sfx('ui'); }
     },
+  };
+
+  // polished layout (v23 POLISH): the same ids and update() as the classic scene above, plus pages (rp:) when there is more than a screen of lands or sigils
+  (ED.skin.screens = ED.skin.screens || {}).routes = function (g, c) {
+    const K = ED.skin.kit, COL = K.COL, u = ED.ui, M = meta(), m = ED.input.mouse, TC = '#7fd8c0', cards = []; u.navMode = 'spatial';
+    if (!W.spineAt(0) || M.discovered.deep) cards.push(BASE);
+    for (const w of lands()) cards.push(w);
+    const roads = Object.values(M.edges).reduce((a, b) => a + b, 0), found = cards.filter(w => M.discovered[w.id]).length;
+    K.head(c, 'ROUTES', { y: 50, color: TC, rule: 220, sub: found + ' of ' + cards.length + ' lands entered  ·  ' + roads + ' road' + (roads === 1 ? '' : 's') + ' taken  ·  ' + sigilCount() + ' of ' + sigilsOn().length + ' sigils' });
+    [['worlds', 'Lands'], ['roads', 'Roads'], ['sigils', 'Sigils']].forEach(([id, lab], i) => u.button(c, 'tab:' + id, lab, 48 + i * 124, 112, 116, 36, { size: 15, color: TC, selected: tab === id }));
+    const pager = (page, pages) => { u.button(c, 'rp:prev', '‹ Prev', 640, 112, 96, 36, { size: 14, disabled: page <= 0 }); K.text(c, (page + 1) + ' / ' + pages, 790, 135, 15, COL.mute, 'center'); u.button(c, 'rp:next', 'Next ›', 844, 112, 68, 36, { size: 14, disabled: page >= pages - 1 }); };
+    if (tab === 'worlds') {
+      // the lands you know first, then rumours, then the dark
+      const rank = (w) => M.discovered[w.id] ? 0 : M.rumours[w.id] ? 1 : M.seen[w.id] ? 2 : 3, order = cards.map((w, i) => ({ w, i })).sort((a, b) => rank(a.w) - rank(b.w) || a.i - b.i), per = 12, pages = Math.max(1, Math.ceil(order.length / per)); rpage = U.clamp(rpage, 0, pages - 1);
+      let hov = null; if (pages > 1) pager(rpage, pages);
+      order.slice(rpage * per, rpage * per + per).forEach((o, k) => {
+        const w = o.w, x = 48 + (k % 3) * 292, y = 166 + Math.floor(k / 3) * 86, disc = !!M.discovered[w.id], seen = !!M.seen[w.id], rum = !!M.rumours[w.id], col = disc ? w.color : '#5a5a78';
+        u.button(c, 'card:' + o.i, '', x, y, 280, 78, { color: col, ghost: !disc });
+        if (disc) { K.rr(c, x + 2, y + 12, 4, 54, 2); c.fillStyle = col; c.fill(); u.text(c, K.fit(c, w.name, 16, 250, true), x + 20, y + 28, 16, ED.skin.color.lite(w.color, 0.2), 'left'); K.text(c, 'entered ' + (M.visits[w.id] | 0) + '×' + (w.risk > 0 && w !== BASE ? '     ' + '☠'.repeat(Math.min(4, w.risk)) : ''), x + 20, y + 48, 13, COL.mute); const gl = gateLine(w); if (gl) K.text(c, K.fit(c, gl, 13, 250, false), x + 20, y + 67, 13, COL.dim); }
+        else { c.strokeStyle = 'rgba(255,255,255,0.2)'; c.lineWidth = 2; c.setLineDash && c.setLineDash([4, 4]); c.beginPath(); c.arc(x + 34, y + 39, 17, 0, TAU); c.stroke(); c.setLineDash && c.setLineDash([]); u.text(c, rum ? K.fit(c, w.name, 15, 190, true) : '???', x + 66, y + 36, 15, rum ? '#a8a8c4' : '#7a7a96', 'left'); K.text(c, rum ? 'a rumour' : seen ? 'a way you have glimpsed' : 'not yet found', x + 66, y + 58, 13, COL.dim); }
+        if (UI_sel('card:' + o.i) || (m.x >= x && m.x <= x + 280 && m.y >= y && m.y <= y + 78)) hov = { w, disc, seen };
+      });
+      const dy = 520; K.glass(c, 48, dy, 864, 108, { a: 0.8, accent: hov && hov.disc ? hov.w.color : null });
+      if (hov && hov.disc) { u.shadow(c, hov.w.name, 70, dy + 32, 20, hov.w.color, 'left'); K.wrap(c, hov.w.rule + (gateLine(hov.w) ? '   ·   ' + gateLine(hov.w) : ''), 70, dy + 58, 820, 21, 15, COL.text); }
+      else if (hov && M.rumours[hov.w.id]) K.wrap(c, rumourText(hov.w), 70, dy + 40, 820, 22, 16, COL.text);
+      else if (hov) K.text(c, hov.seen ? 'You have seen a way here, but not walked it.' : 'Nothing is known of this land.', 70, dy + 56, 16, COL.mute);
+      else K.text(c, 'Point at a land, or tap it, to read what you know of it.', 70, dy + 56, 16, COL.dim);
+    } else if (tab === 'roads') {
+      const rows = Object.keys(M.edges).sort((a, b) => M.edges[b] - M.edges[a]).slice(0, 16); K.glass(c, 48, 166, 864, 440, { a: 0.8 });
+      if (!rows.length) K.text(c, 'No roads taken yet. Beat a MEGA boss and choose a door.', C.W / 2, 390, 18, COL.dim, 'center');
+      rows.forEach((k, i) => { const [a, b] = k.split('>'), y = 202 + i * 26; if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.035)'; c.fillRect(56, y - 19, 848, 26); } u.text(c, K.fit(c, wname(a), 15, 300, true), 76, y, 15, (W.byId[a] || BASE).color, 'left'); u.text(c, '›', 440, y, 15, COL.dim, 'center'); u.text(c, K.fit(c, wname(b), 15, 300, true), 480, y, 15, (W.byId[b] || BASE).color, 'left'); u.text(c, '×' + M.edges[k], 886, y, 15, COL.ink, 'right'); });
+    } else {
+      const list = sigilsOn(), per = 12, pages = Math.max(1, Math.ceil(list.length / per)); rpage = U.clamp(rpage, 0, pages - 1); if (pages > 1) pager(rpage, pages);
+      list.slice(rpage * per, rpage * per + per).forEach((s, k) => {
+        const x = 48 + (k % 4) * 220, y = 166 + Math.floor(k / 4) * 150, have = !!M.sigils[s.id], w = 208;
+        K.glass(c, x, y, w, 140, { a: 0.8, accent: have ? s.color : null, shadow: false });
+        if (have) {
+          glow(c, x + 30, y + 32, 28, s.color, 0.2); glyphSigil(c, s.id, x + 30, y + 32, 15, s.color); u.text(c, K.fit(c, 'Sigil of ' + s.name, 15, w - 70, true), x + 56, y + 30, 15, s.color, 'left'); K.text(c, K.fit(c, s.art ? s.art.name : '', 13, w - 70, false), x + 56, y + 48, 13, '#e8f4f0');
+          K.wrap(c, s.art ? s.art.text : s.gain, x + 14, y + 74, w - 28, 16, 13, '#bcccc8'); const src = s.mini && ED.minibosses.def(s.mini); K.text(c, K.fit(c, src ? 'from ' + src.name : 'on a secret altar', 13, w - 28, false), x + 14, y + 132, 13, COL.dim);
+        } else { glyphSigil(c, s.id, x + 30, y + 32, 15, '#34344a'); u.text(c, '???', x + 56, y + 38, 15, '#6a6a86', 'left'); K.text(c, 'not found', x + 14, y + 80, 14, COL.dim); }
+      });
+      K.text(c, 'A sigil is kept for good. Some doors know them, and each lends a small art.', C.W / 2, 626, 14, COL.mute, 'center');
+    }
+    K.back(c, 'back', 'Back');
   };
   const UI_sel = (id) => ED.ui.navSel === id;
 

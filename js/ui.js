@@ -14,10 +14,12 @@
 
     // ============================================================== text + widgets
     text(c, s, x, y, size, color, align, bold) {
+      if (UI.cap) { UI.cap.texts.push({ s: String(s), x, y, size, color, align: align || 'left', bold: bold !== false }); return; }              // (a hook is being captured: art_kit.js)
       c.font = (bold === false ? '' : 'bold ') + size + 'px ' + FONT; c.textAlign = align || 'left'; c.textBaseline = 'alphabetic';
       c.fillStyle = color || '#fff'; c.fillText(s, x, y);
     },
     shadow(c, s, x, y, size, color, align, bold) {
+      if (UI.cap) { UI.text(c, s, x, y, size, color, align, bold); return; }
       UI.text(c, s, x + 1.5, y + 1.5, size, 'rgba(0,0,0,0.7)', align, bold); UI.text(c, s, x, y, size, color, align, bold);
     },
     panel(c, x, y, w, h, border, alpha) {
@@ -26,6 +28,7 @@
       c.strokeStyle = border || '#5a5a78'; c.lineWidth = 2; c.strokeRect(x + 1, y + 1, w - 2, h - 2);
     },
     wrap(c, s, x, y, w, lh, size, color) {
+      if (UI.cap) { UI.cap.texts.push({ s: String(s), x, y, size, color, align: 'left', bold: false, wrap: w, lh }); return y + lh; }
       c.font = size + 'px ' + FONT; c.textAlign = 'left'; c.fillStyle = color || '#cfd0e0';
       const words = String(s).split(' '); let line = '', yy = y;
       for (const wd of words) {
@@ -43,6 +46,7 @@
     /** register + draw a button; returns true if currently selected */
     button(c, id, label, x, y, w, h, o) {
       o = o || {};
+      if (UI.cap) { UI.cap.buttons.push({ id, label, x, y, w, h, o }); return false; }
       const idx = UI.btns.length; UI.btns.push({ id, x, y, w, h, nav: o.nav !== false && !o.disabled, disabled: !!o.disabled, o });
       const m = ED.input.mouse; const hov = m.x >= x && m.x <= x + w && m.y >= y && m.y <= y + h;
       const sel = !o.disabled && (o.selected || (UI.navSel === id));
@@ -61,7 +65,8 @@
       const p = g.player, t = g.frameAll, st = p.st;
       // top bar
       const skinTop = ED.skin.on() && ED.skin.ui && ED.skin.ui.hudTop;
-      if (skinTop) skinTop(g, c, p); else {
+      const full = !!skinTop && skinTop(g, c, p) === true;                    // (the polished bar draws everything; the classic code below is skipped)
+      if (!skinTop) {
       c.fillStyle = 'rgba(8,8,16,0.96)'; c.fillRect(0, 0, C.W, C.HUD);
       c.fillStyle = g.dif.dangerColor; c.fillRect(0, C.HUD - 2, C.W, 2);
       // hearts
@@ -75,6 +80,7 @@
         if (full < 1) { c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(x + sz * 1.6 * full * 2 - sz * 1.6, y - sz * 1.4, 0, 0); }
       }
       }
+      if (!full) {
       // resources
       const rx = 238;
       ED.icons.draw(c, 'coin', rx + 8, 16, 7, g.goldPulse > 0 ? '#fff6a0' : '#ffd24a'); UI.text(c, String(p.gold), rx + 22, 21, 15, g.goldPulse > 0 ? '#fff6a0' : '#ffd24a');
@@ -124,8 +130,9 @@
       if (g.run.assist) UI.text(c, 'ASSIST: ' + ED.D.ASSIST[g.run.assist].name.toUpperCase(), 14, C.HUD + 32, 10, '#ffb04a', 'left', true);
       UI.text(c, g.run.kills + ' kills', 950, 58, 10, '#8a8aa8', 'right', false);
 
+      }
       UI.drawMinimap(g, c);
-      ED.runHooks('hud', g, c);
+      if (full) ED.skin.ui.hudHooks(g, c); else ED.runHooks('hud', g, c);
       UI.drawRelicBar(g, c);
       UI.drawBossBars(g, c);
       UI.drawToasts(g, c);
@@ -135,7 +142,7 @@
       // low hp vignette
       if (p.hp <= p.maxHp * 0.25 && !p.dead) { if (ED.skin.on() && ED.skin.ui && ED.skin.ui.lowHp) ED.skin.ui.lowHp(g, c); else { c.fillStyle = 'rgba(255,0,0,' + (0.05 + 0.04 * Math.sin(g.frameAll * 0.2)) + ')'; c.fillRect(0, C.HUD, C.W, C.ROOM_H); } }
       // seed (small)
-      UI.text(c, 'seed ' + g.run.seed, 8, C.H - 5, 10, 'rgba(255,255,255,0.35)', 'left', false);
+      if (!ED.skin.on()) UI.text(c, 'seed ' + g.run.seed, 8, C.H - 5, 10, 'rgba(255,255,255,0.35)', 'left', false);               // (the polished look keeps the seed on the pause screen)
       if (g.floorNum === 1 && g.rt && g.rt.tutorial && g.room.type === 'start' && g.run.frames < 60 * 40) UI.drawTutorial(g, c);
       if (ED.input.held('tab')) UI.drawBigMap(g, c);
     },
@@ -185,7 +192,7 @@
         if (g.hintId === r.id) { c.strokeStyle = 'rgba(255,230,120,' + (0.5 + 0.5 * Math.sin(g.frameAll * 0.12)) + ')'; c.lineWidth = 2; c.strokeRect(rx - 2, ry - 2, rw + 4, rh + 4); }
         if (g.room === r) { c.strokeStyle = 'rgba(255,255,255,' + (0.6 + 0.4 * Math.sin(g.frameAll * 0.2)) + ')'; c.lineWidth = 2; c.strokeRect(rx - 1, ry - 1, rw + 2, rh + 2); }
       }
-      UI.text(c, 'MAP', px + 5, py + H - 5, 8, '#6a6a88', 'left', false);
+      { const sk = ED.skin.on(); UI.text(c, 'MAP', px + (sk ? 7 : 5), py + H - (sk ? 6 : 5), sk ? 13 : 8, '#6a6a88', 'left', false); }
     },
 
     /** hold Tab: large floor map + legend of lock colours and room icons */
@@ -241,18 +248,18 @@
       UI.drawLinesPanel(c, name, ED.items.itemColor(item), lines, x, y, above);
     },
     drawLinesPanel(c, title, tcol, lines, x, y, above, extra) {
-      const w = 276, pad = 10;
-      let h = 30 + pad;
-      const heights = lines.map(l => UI.wrapHeight(c, l.t, w - pad * 2, 14, 12));
+      const sk = ED.skin.on(), w = sk ? 340 : 276, pad = sk ? 14 : 10, tsz = sk ? 17 : 14, fsz = sk ? 14 : 12, lh = sk ? 18 : 14, el = sk ? 19 : 15;       // (the polished look reads larger)
+      let h = (sk ? 36 : 30) + pad;
+      const heights = lines.map(l => UI.wrapHeight(c, l.t, w - pad * 2, lh, fsz));
       for (const hh of heights) h += hh + 2;
-      if (extra) h += extra.length * 15 + 4;
+      if (extra) h += extra.length * el + 4;
       let px = U.clamp(x - w / 2, 6, C.W - w - 6), py = above ? y - h - 8 : y + 8;
       py = U.clamp(py, C.HUD + 4, C.H - h - 4);
       UI.panel(c, px, py, w, h, tcol, 0.94);
-      UI.text(c, title, px + pad, py + 21, 14, tcol);
-      let yy = py + 40;
-      lines.forEach((l, i) => { yy = UI.wrap(c, l.t, px + pad, yy, w - pad * 2, 14, 12, l.c) + 2; });
-      if (extra) for (const e of extra) { UI.text(c, e.t, px + pad, yy + 8, 12, e.c); yy += 15; }
+      UI.text(c, title, px + pad, py + (sk ? 26 : 21), tsz, tcol);
+      let yy = py + (sk ? 48 : 40);
+      lines.forEach((l, i) => { yy = UI.wrap(c, l.t, px + pad, yy, w - pad * 2, lh, fsz, l.c) + 2; });
+      if (extra) for (const e of extra) { UI.text(c, e.t, px + pad, yy + 8, fsz, e.c); yy += el; }
     },
     drawInterPanel(g, c) {
       const it = g.nearInter; if (!it || g.modal) return;
@@ -399,8 +406,9 @@
       const pt = D.PATTERN_TIERS.find(p => p.floor === g.floorNum && p.floor > 1); if (pt) news.push('Enemy fire patterns grow more complex!');
       if (d.enrageFrames && g.floorNum === 10) news.push('Bosses now ENRAGE if the fight drags on.');
       news.forEach((l, i) => UI.text(c, '▲ ' + l, C.W / 2, by + 164 + i * 20, 14, '#ffd24a', 'center'));          // (a land's own 'foes of this land' line sits above them at 388)
-      UI.text(c, 'Seed ' + g.run.seed + '   ·   ' + ED.items.CLASSES[g.run.classId].name, C.W / 2, C.H - 40, 12, '#6a6a88', 'center', false);
-      if (t > 38) UI.text(c, 'press any key', C.W / 2, C.H - 18, 12, 'rgba(255,255,255,' + (0.4 + 0.3 * Math.sin(t * 0.15)) + ')', 'center', false);
+      const sk = ED.skin.on();
+      UI.text(c, 'Seed ' + g.run.seed + '   ·   ' + ED.items.CLASSES[g.run.classId].name, C.W / 2, C.H - 40, sk ? 14 : 12, sk ? '#8a8aa8' : '#6a6a88', 'center', false);
+      if (t > 38) UI.text(c, sk && ED.input.touchOn() ? 'tap to begin' : 'press any key', C.W / 2, C.H - 18, sk ? 14 : 12, 'rgba(255,255,255,' + (0.4 + 0.3 * Math.sin(t * 0.15)) + ')', 'center', false);
       ED.runHooks('intro', g, c);
       c.restore();
     },
@@ -430,10 +438,10 @@
         UI.panel(c, x, y, w, h, '#ffd24a', 0.97);
         UI.shadow(c, g.floorNum === 5 ? 'THE COLOSSUS FALLS!' : 'MEGA BOSS SLAIN!', C.W / 2, y + 48, 30, '#ffd24a', 'center');
         UI.text(c, 'You have reached a milestone on floor ' + g.floorNum + '.', C.W / 2, y + 80, 14, '#e0e0f0', 'center', false);
-        UI.text(c, 'Beyond lies the Endless: floors without end, each more dangerous than the last.', C.W / 2, y + 102, 12, '#9a9ab8', 'center', false);
-        UI.button(c, 'continue', 'Continue into Endless', x + 50, y + 130, w - 100, 50, { color: '#6ee07a', size: 20, sub: 'The run goes on until you fall' });
-        UI.button(c, 'cashout', 'Cash Out (end run as a victory)', x + 50, y + 195, w - 100, 50, { color: '#ffd24a', size: 18, sub: 'Bank your victory — score ' + ED.menus.score(g) });
-        if (m.type === 'milestone' && g.floorNum !== 5) UI.button(c, 'cancel', 'Not yet', x + 50, y + 255, w - 100, 30, {});
+        UI.text(c, 'Beyond lies the Endless: floors without end,', C.W / 2, y + 102, 13, '#a8a8c8', 'center', false); UI.text(c, 'each more dangerous than the last.', C.W / 2, y + 120, 13, '#a8a8c8', 'center', false);
+        UI.button(c, 'continue', 'Continue into Endless', x + 50, y + 138, w - 100, 52, { color: '#6ee07a', size: 20, sub: 'The run goes on until you fall' });
+        UI.button(c, 'cashout', 'Cash Out (end run as a victory)', x + 50, y + 200, w - 100, 52, { color: '#ffd24a', size: 18, sub: 'Bank your victory — score ' + ED.menus.score(g) });
+        if (m.type === 'milestone' && g.floorNum !== 5) UI.button(c, 'cancel', 'Not yet', x + 50, y + 260, w - 100, 32, {});
       } else if (ED.modalImpl[m.type]) ED.modalImpl[m.type].draw(g, c, m);
     },
     updateModal(g) {

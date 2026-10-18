@@ -95,7 +95,7 @@
     return out;
   }
   ED.hook('pauseUI', V, (g, c) => {
-    if (!R_ || !g.run) return; const u = ED.ui, o = overview(g), x = 90, y = 338, w = 270;
+    if (!R_ || !g.run || (ED.skin.on() && ED.skin.screens && ED.skin.screens.paused)) return; const u = ED.ui, o = overview(g), x = 90, y = 338, w = 270;
     u.panel(c, x, y, w, 282, '#3a5a58', 0.85); u.text(c, 'ROUTE', x + 12, y + 20, 13, '#7fd8c0');
     let yy = y + 40; const path = o.lands.join('  ›  ');
     yy = u.wrap(c, path, x + 12, yy, w - 24, 13, 10, '#c8e8e0') || yy + 13; yy += 6;
