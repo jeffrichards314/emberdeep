@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tiny no-cache static server for EMBERDEEP.   usage:  python3 serve.py [port]   (default 8000)
+"""Tiny no-cache static server for EMBERDEEP.   usage:  python3 serve.py [port]   (default: $PORT, else 8000)
 Opening index.html straight from disk works too — this is only here for convenience."""
 import http.server, socketserver, sys, os
 
@@ -11,7 +11,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         pass
 
 if __name__ == '__main__':
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get('PORT', 8000))
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(('', port), Handler) as httpd:
